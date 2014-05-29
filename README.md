@@ -7,9 +7,9 @@ overview
 ========
 
 Patch Windows PuTTY so that after
-  copy pscp.exe scp.exe
-  copy plink.exe ssh.exe
-  copy pkeygen.exe ssh-keygen.exe
+  - copy pscp.exe scp.exe
+  - copy plink.exe ssh.exe
+  - copy pkeygen.exe ssh-keygen.exe
 scp, ssh and ssh-keygen, from the command line, behave more like the OpenSsh
 counterparts. Some behaviors are not covered -- mainly just enough to support
 internal gcloud usage patterns.
