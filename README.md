@@ -6,7 +6,7 @@ Patches to [PuTTY](http://www.chiark.greenend.org.uk/~sgtatham/putty/download.ht
 overview
 ========
 
-Patches PuTTY for Windows [source code](http://tartarus.org/~simon/putty-snapshots/putty-src.zip) (snapshot taken on 5/28/2014) so that after renaming
+Patches PuTTY for Windows [source code](http://tartarus.org/~simon/putty-snapshots/putty-src.zip) (2014-05-21 snapshot) so that after renaming
 
   - `copy pscp.exe scp.exe`
   - `copy plink.exe ssh.exe`
