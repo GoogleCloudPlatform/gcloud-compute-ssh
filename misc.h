@@ -37,9 +37,13 @@ char *dupprintf(const char *fmt, ...)
 #endif
     ;
 char *dupvprintf(const char *fmt, va_list ap);
+size_t szprintf(char* buf, size_t size, const char* fmt, ...);
 void burnstr(char *string);
 
 int toint(unsigned);
+#if defined _WIN64
+#define toint(u)	toint((unsigned)(u))
+#endif /*_WIN64*/
 
 char *fgetline(FILE *fp);
 
@@ -48,13 +52,13 @@ void base64_encode_atom(unsigned char *data, int n, char *out);
 struct bufchain_granule;
 typedef struct bufchain_tag {
     struct bufchain_granule *head, *tail;
-    int buffersize;		       /* current amount of buffered data */
+    size_t buffersize;		       /* current amount of buffered data */
 } bufchain;
 
 void bufchain_init(bufchain *ch);
 void bufchain_clear(bufchain *ch);
 int bufchain_size(bufchain *ch);
-void bufchain_add(bufchain *ch, const void *data, int len);
+void bufchain_add(bufchain *ch, const void *data, size_t len);
 void bufchain_prefix(bufchain *ch, void **data, int *len);
 void bufchain_consume(bufchain *ch, int len);
 void bufchain_fetch(bufchain *ch, void *data, int len);
@@ -142,5 +146,7 @@ void debug_memdump(void *buf, int len, int L);
 #define PUT_16BIT_MSB_FIRST(cp, value) ( \
   (cp)[0] = (unsigned char)((value) >> 8), \
   (cp)[1] = (unsigned char)(value) )
+
+#include "miscps.h"
 
 #endif

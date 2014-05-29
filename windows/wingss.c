@@ -88,11 +88,12 @@ struct ssh_gss_liblist *ssh_gss_setup(Conf *conf)
         ret = RegQueryValueEx(regkey, "InstallDir", NULL, &type, NULL, &size);
 
 	if (ret == ERROR_SUCCESS && type == REG_SZ) {
-	    buffer = snewn(size + 20, char);
+	    int total = size + 20;
+	    buffer = snewn(total, char);
 	    ret = RegQueryValueEx(regkey, "InstallDir", NULL,
 				  &type, buffer, &size);
 	    if (ret == ERROR_SUCCESS && type == REG_SZ) {
-		strcat(buffer, "\\bin\\gssapi32.dll");
+	        szprintf(buffer + size, total - size, "\\bin\\gssapi32.dll");
 		module = LoadLibrary(buffer);
 	    }
 	    sfree(buffer);
@@ -270,8 +271,8 @@ static Ssh_gss_stat ssh_sspi_init_sec_context(struct ssh_gss_library *lib,
 					      Ssh_gss_buf *send_tok)
 {
     winSsh_gss_ctx *winctx = (winSsh_gss_ctx *) *ctx;
-    SecBuffer wsend_tok = {send_tok->length,SECBUFFER_TOKEN,send_tok->value};
-    SecBuffer wrecv_tok = {recv_tok->length,SECBUFFER_TOKEN,recv_tok->value};
+    SecBuffer wsend_tok = {(int)send_tok->length,SECBUFFER_TOKEN,send_tok->value};
+    SecBuffer wrecv_tok = {(int)recv_tok->length,SECBUFFER_TOKEN,recv_tok->value};
     SecBufferDesc output_desc={SECBUFFER_VERSION,1,&wsend_tok};
     SecBufferDesc input_desc ={SECBUFFER_VERSION,1,&wrecv_tok};
     unsigned long flags=ISC_REQ_MUTUAL_AUTH|ISC_REQ_REPLAY_DETECT|
@@ -428,7 +429,7 @@ static Ssh_gss_stat ssh_sspi_get_mic(struct ssh_gss_library *lib,
     InputBufferDescriptor.pBuffers = InputSecurityToken;
     InputBufferDescriptor.ulVersion = SECBUFFER_VERSION;
     InputSecurityToken[0].BufferType = SECBUFFER_DATA;
-    InputSecurityToken[0].cbBuffer = buf->length;
+    InputSecurityToken[0].cbBuffer = (unsigned long)buf->length;
     InputSecurityToken[0].pvBuffer = buf->value;
     InputSecurityToken[1].BufferType = SECBUFFER_TOKEN;
     InputSecurityToken[1].cbBuffer = ContextSizes.cbMaxSignature;

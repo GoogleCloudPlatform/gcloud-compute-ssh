@@ -328,22 +328,19 @@ void enum_settings_finish(void *handle)
     sfree(e);
 }
 
-static void hostkey_regname(char *buffer, const char *hostname,
+static void hostkey_regname(char *buffer, int len, const char *hostname,
 			    int port, const char *keytype)
 {
-    int len;
-    strcpy(buffer, keytype);
-    strcat(buffer, "@");
-    len = strlen(buffer);
-    len += sprintf(buffer + len, "%d:", port);
-    mungestr(hostname, buffer + strlen(buffer));
+    size_t pos;
+    pos = szprintf(buffer, len, "%s@%d:", keytype, port);
+    mungestr(hostname, buffer + pos);
 }
 
 int verify_host_key(const char *hostname, int port,
 		    const char *keytype, const char *key)
 {
     char *otherstr, *regname;
-    int len;
+    int len, regnamelen;
     HKEY rkey;
     DWORD readlen;
     DWORD type;
@@ -355,9 +352,10 @@ int verify_host_key(const char *hostname, int port,
      * Now read a saved key in from the registry and see what it
      * says.
      */
-    regname = snewn(3 * (strlen(hostname) + strlen(keytype)) + 15, char);
+    regnamelen = 3 * (strlen(hostname) + strlen(keytype)) + 15;
+    regname = snewn(regnamelen, char);
 
-    hostkey_regname(regname, hostname, port, keytype);
+    hostkey_regname(regname, regnamelen, hostname, port, keytype);
 
     if (RegOpenKey(HKEY_CURRENT_USER, PUTTY_REG_POS "\\SshHostKeys",
 		   &rkey) != ERROR_SUCCESS) {
@@ -453,11 +451,13 @@ void store_host_key(const char *hostname, int port,
 		    const char *keytype, const char *key)
 {
     char *regname;
+    int regnamelen;
     HKEY rkey;
 
-    regname = snewn(3 * (strlen(hostname) + strlen(keytype)) + 15, char);
+    regnamelen = 3 * (strlen(hostname) + strlen(keytype)) + 15;
+    regname = snewn(regnamelen, char);
 
-    hostkey_regname(regname, hostname, port, keytype);
+    hostkey_regname(regname, regnamelen, hostname, port, keytype);
 
     if (RegCreateKey(HKEY_CURRENT_USER, PUTTY_REG_POS "\\SshHostKeys",
 		     &rkey) == ERROR_SUCCESS) {
@@ -500,6 +500,7 @@ static HANDLE access_random_seed(int action)
     HKEY rkey;
     DWORD type, size;
     HANDLE rethandle;
+    int pos;
     char seedpath[2 * MAX_PATH + 10] = "\0";
 
     /*
@@ -549,15 +550,11 @@ static HANDLE access_random_seed(int action)
     }
     if (p_SHGetFolderPathA) {
 	if (SUCCEEDED(p_SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA,
+					 NULL, SHGFP_TYPE_CURRENT, seedpath)) ||
+	    SUCCEEDED(p_SHGetFolderPathA(NULL, CSIDL_APPDATA,
 					 NULL, SHGFP_TYPE_CURRENT, seedpath))) {
-	    strcat(seedpath, "\\PUTTY.RND");
-	    if (try_random_seed(seedpath, action, &rethandle))
-		return rethandle;
-	}
-
-	if (SUCCEEDED(p_SHGetFolderPathA(NULL, CSIDL_APPDATA,
-					 NULL, SHGFP_TYPE_CURRENT, seedpath))) {
-	    strcat(seedpath, "\\PUTTY.RND");
+	    pos = strlen(seedpath);
+	    szprintf(seedpath + pos, sizeof(seedpath) - pos, "\\PUTTY.RND");
 	    if (try_random_seed(seedpath, action, &rethandle))
 		return rethandle;
 	}
@@ -568,16 +565,19 @@ static HANDLE access_random_seed(int action)
      * user's home directory.
      */
     {
-	int len, ret;
+	int len;
 
-	len =
+	pos =
 	    GetEnvironmentVariable("HOMEDRIVE", seedpath,
 				   sizeof(seedpath));
-	ret =
-	    GetEnvironmentVariable("HOMEPATH", seedpath + len,
-				   sizeof(seedpath) - len);
-	if (ret != 0) {
-	    strcat(seedpath, "\\PUTTY.RND");
+	len =
+	    GetEnvironmentVariable("HOMEPATH", seedpath + pos,
+				   sizeof(seedpath) - pos);
+	if (pos > 0 && pos < (int)sizeof(seedpath) &&
+	    len > 0 && len < (int)(sizeof(seedpath) - pos)) {
+	    pos += len;
+	    szprintf(seedpath + pos, sizeof(seedpath) - pos,
+		     "\\PUTTY.RND");
 	    if (try_random_seed(seedpath, action, &rethandle))
 		return rethandle;
 	}
@@ -586,10 +586,12 @@ static HANDLE access_random_seed(int action)
     /*
      * And finally, fall back to C:\WINDOWS.
      */
-    GetWindowsDirectory(seedpath, sizeof(seedpath));
-    strcat(seedpath, "\\PUTTY.RND");
-    if (try_random_seed(seedpath, action, &rethandle))
-	return rethandle;
+    pos = GetWindowsDirectory(seedpath, sizeof(seedpath));
+    if (pos > 0 && pos < sizeof(seedpath)) {
+	szprintf(seedpath + pos, sizeof(seedpath) - pos, "\\PUTTY.RND");
+        if (try_random_seed(seedpath, action, &rethandle))
+	    return rethandle;
+    }
 
     /*
      * If even that failed, give up.
@@ -739,7 +741,7 @@ static int transform_jumplist_registry
 
         /* Save the new list to the registry. */
         ret = RegSetValueEx(pjumplist_key, reg_jumplist_value, 0, REG_MULTI_SZ,
-                            new_value, piterator_new - new_value);
+                            new_value, (DWORD)(piterator_new - new_value));
 
         sfree(old_value);
         old_value = new_value;

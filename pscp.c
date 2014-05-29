@@ -27,6 +27,8 @@
 #include "storage.h"
 #include "int64.h"
 
+static char* command_name;
+
 static int list = 0;
 static int verbose = 0;
 static int recursive = 0;
@@ -60,7 +62,7 @@ const char *const appname = "PSCP";
  */
 #define MAX_SCP_BUFSIZE 16384
 
-void ldisc_send(void *handle, char *buf, int len, int interactive)
+void ldisc_send(void *handle, char *buf, size_t len, int interactive)
 {
     /*
      * This is only here because of the calls to ldisc_send(NULL,
@@ -179,13 +181,12 @@ void agent_schedule_callback(void (*callback)(void *, void *, int),
  */
 
 static unsigned char *outptr;	       /* where to put the data */
-static unsigned outlen;		       /* how much data required */
+static size_t outlen;		       /* how much data required */
 static unsigned char *pending = NULL;  /* any spare data */
-static unsigned pendlen = 0, pendsize = 0;	/* length and phys. size of buffer */
-int from_backend(void *frontend, int is_stderr, const char *data, int datalen)
+static size_t pendlen = 0, pendsize = 0;	/* length and phys. size of buffer */
+int from_backend(void *frontend, int is_stderr, const char *data, size_t len)
 {
     unsigned char *p = (unsigned char *) data;
-    unsigned len = (unsigned) datalen;
 
     /*
      * stderr data is just spouted to local stderr and otherwise
@@ -199,7 +200,7 @@ int from_backend(void *frontend, int is_stderr, const char *data, int datalen)
     }
 
     if ((outlen > 0) && (len > 0)) {
-	unsigned used = outlen;
+	size_t used = outlen;
 	if (used > len)
 	    used = len;
 	memcpy(outptr, p, used);
@@ -220,7 +221,7 @@ int from_backend(void *frontend, int is_stderr, const char *data, int datalen)
 
     return 0;
 }
-int from_backend_untrusted(void *frontend_handle, const char *data, int len)
+int from_backend_untrusted(void *frontend_handle, const char *data, size_t len)
 {
     /*
      * No "untrusted" output should get here (the way the code is
@@ -253,7 +254,7 @@ static int ssh_scp_recv(unsigned char *buf, int len)
      * need.
      */
     if (pendlen > 0) {
-	unsigned pendused = pendlen;
+	size_t pendused = pendlen;
 	if (pendused > outlen)
 	    pendused = outlen;
 	memcpy(outptr, pending, pendused);
@@ -828,7 +829,8 @@ int scp_source_setup(char *target, int shouldbedir)
 	    scp_sftp_targetisdir = (attrs.permissions & 0040000) != 0;
 
 	if (shouldbedir && !scp_sftp_targetisdir) {
-	    bump("pscp: remote filespec %s: not a directory\n", target);
+	    bump("%s: remote filespec %s: not a directory\n",
+		 command_name, target);
 	}
 
 	scp_sftp_remotepath = dupstr(target);
@@ -860,7 +862,7 @@ int scp_send_filetimes(unsigned long mtime, unsigned long atime)
 	return 0;
     } else {
 	char buf[80];
-	sprintf(buf, "T%lu 0 %lu 0\n", mtime, atime);
+	szprintf(buf, sizeof(buf), "T%lu 0 %lu 0\n", mtime, atime);
 	back->send(backhandle, buf, strlen(buf));
 	return response();
     }
@@ -890,8 +892,8 @@ int scp_send_filename(char *name, uint64 size, int permissions)
 	scp_sftp_filehandle = fxp_open_recv(pktin, req);
 
 	if (!scp_sftp_filehandle) {
-	    tell_user(stderr, "pscp: unable to open %s: %s",
-		      fullname, fxp_error());
+	    tell_user(stderr, "%s: unable to open %s: %s",
+		      command_name, fullname, fxp_error());
             sfree(fullname);
 	    errs++;
 	    return 1;
@@ -907,7 +909,7 @@ int scp_send_filename(char *name, uint64 size, int permissions)
 	uint64_decimal(size, sizestr);
         if (permissions < 0)
             permissions = 0644;
-	sprintf(buf, "C%04o %s ", (int)(permissions & 07777), sizestr);
+	szprintf(buf, sizeof(buf), "C%04o %s ", (int)(permissions & 07777), sizestr);
 	back->send(backhandle, buf, strlen(buf));
 	back->send(backhandle, name, strlen(name));
 	back->send(backhandle, "\n", 1);
@@ -1071,7 +1073,7 @@ int scp_send_dirname(char *name, int modes)
 	return 0;
     } else {
 	char buf[40];
-	sprintf(buf, "D%04o 0 ", modes);
+	szprintf(buf, sizeof(buf), "D%04o 0 ", modes);
 	back->send(backhandle, buf, strlen(buf));
 	back->send(backhandle, name, strlen(name));
 	back->send(backhandle, "\n", 1);
@@ -1255,8 +1257,8 @@ int scp_get_sink_action(struct scp_sink_action *act)
 		if (head->wildcard) {
 		    act->action = SCP_SINK_RETRY;
 		    if (!head->matched_something) {
-			tell_user(stderr, "pscp: wildcard '%s' matched "
-				  "no files", head->wildcard);
+			tell_user(stderr, "%s: wildcard '%s' matched "
+				  "no files", command_name, head->wildcard);
 			errs++;
 		    }
 		    sfree(head->wildcard);
@@ -1310,7 +1312,8 @@ int scp_get_sink_action(struct scp_sink_action *act)
 	     * things matching the wildcard.
 	     */
 	    if (!scp_sftp_recursive && !scp_sftp_wildcard) {
-		tell_user(stderr, "pscp: %s: is a directory", fname);
+		tell_user(stderr, "%s: %s: is a directory",
+			  command_name, fname);
 		errs++;
 		if (must_free_fname) sfree(fname);
 		if (scp_sftp_dirstack_head) {
@@ -1339,8 +1342,8 @@ int scp_get_sink_action(struct scp_sink_action *act)
 	    dirhandle = fxp_opendir_recv(pktin, req);
 
 	    if (!dirhandle) {
-		tell_user(stderr, "pscp: unable to open directory %s: %s",
-			  fname, fxp_error());
+		tell_user(stderr, "%s: unable to open directory %s: %s",
+			  command_name, fname, fxp_error());
 		if (must_free_fname) sfree(fname);
 		errs++;
 		return 1;
@@ -1357,8 +1360,8 @@ int scp_get_sink_action(struct scp_sink_action *act)
 		if (names == NULL) {
 		    if (fxp_error_type() == SSH_FX_EOF)
 			break;
-		    tell_user(stderr, "pscp: reading directory %s: %s",
-			      fname, fxp_error());
+		    tell_user(stderr, "%s: reading directory %s: %s",
+			      command_name, fname, fxp_error());
 
                     req = fxp_close_send(dirhandle);
                     pktin = sftp_wait_for_reply(req);
@@ -1549,8 +1552,8 @@ int scp_accept_filexfer(void)
 	scp_sftp_filehandle = fxp_open_recv(pktin, req);
 
 	if (!scp_sftp_filehandle) {
-	    tell_user(stderr, "pscp: unable to open %s: %s",
-		      scp_sftp_currentname, fxp_error());
+	    tell_user(stderr, "%s: unable to open %s: %s",
+		      command_name, scp_sftp_currentname, fxp_error());
 	    errs++;
 	    return 1;
 	}
@@ -1576,7 +1579,8 @@ int scp_recv_filedata(char *data, int len)
 	pktin = sftp_recv();
 	ret = xfer_download_gotpkt(scp_sftp_xfer, pktin);
 	if (ret <= 0) {
-	    tell_user(stderr, "pscp: error while reading: %s", fxp_error());
+	    tell_user(stderr, "%s: error while reading: %s",
+		      command_name, fxp_error());
             if (ret == INT_MIN)        /* pktin not even freed */
                 sfree(pktin);
 	    errs++;
@@ -1623,7 +1627,8 @@ int scp_finish_filerecv(void)
 	    pktin = sftp_recv();
 	    ret = xfer_download_gotpkt(scp_sftp_xfer, pktin);
             if (ret <= 0) {
-                tell_user(stderr, "pscp: error while reading: %s", fxp_error());
+                tell_user(stderr, "%s: error while reading: %s",
+			  command_name, fxp_error());
                 if (ret == INT_MIN)        /* pktin not even freed */
                     sfree(pktin);
                 errs++;
@@ -1655,7 +1660,7 @@ static void run_err(const char *fmt, ...)
     va_start(ap, fmt);
     errs++;
     str = dupvprintf(fmt, ap);
-    str2 = dupcat("pscp: ", str, "\n", NULL);
+    str2 = dupcat(command_name, ": ", str, "\n", NULL);
     sfree(str);
     scp_send_errmsg(str2);
     tell_user(stderr, "%s", str2);
@@ -2235,10 +2240,12 @@ static void usage(void)
 {
     printf("PuTTY Secure Copy client\n");
     printf("%s\n", ver);
-    printf("Usage: pscp [options] [user@]host:source target\n");
-    printf
-	("       pscp [options] source [source...] [user@]host:target\n");
-    printf("       pscp [options] -ls [user@]host:filespec\n");
+    printf("Usage: %s [options] [user@]host:source target\n",
+	   command_name);
+    printf("       %s [options] source [source...] [user@]host:target\n",
+	   command_name);
+    printf("       %s [options] -ls [user@]host:filespec\n",
+	   command_name);
     printf("Options:\n");
     printf("  -V        print version information and exit\n");
     printf("  -pgpfp    print PGP key fingerprints and exit\n");
@@ -2276,18 +2283,18 @@ static void usage(void)
 
 void version(void)
 {
-    printf("pscp: %s\n", ver);
+    printf("%s: %s\n", command_name, ver);
     cleanup_exit(1);
 }
 
 void cmdline_error(char *p, ...)
 {
     va_list ap;
-    fprintf(stderr, "pscp: ");
+    fprintf(stderr, "%s: ", command_name);
     va_start(ap, p);
     vfprintf(stderr, p, ap);
     va_end(ap);
-    fprintf(stderr, "\n      try typing just \"pscp\" for help\n");
+    fprintf(stderr, "\n      try typing just \"%s\" for help\n", command_name);
     exit(1);
 }
 
@@ -2302,6 +2309,7 @@ int psftp_main(int argc, char *argv[])
 {
     int i;
 
+    command_name = get_command_name(argv);
     default_protocol = PROT_TELNET;
 
     flags = FLAG_STDERR

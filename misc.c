@@ -259,8 +259,9 @@ void prompt_ensure_result_size(prompt_t *pr, int newlen)
 }
 void prompt_set_result(prompt_t *pr, const char *newstr)
 {
-    prompt_ensure_result_size(pr, strlen(newstr) + 1);
-    strcpy(pr->result, newstr);
+    int len = strlen(newstr) + 1;
+    prompt_ensure_result_size(pr, len);
+    szprintf(pr->result, len, "%s", newstr);
 }
 void free_prompts(prompts_t *p)
 {
@@ -286,9 +287,9 @@ char *dupstr(const char *s)
 {
     char *p = NULL;
     if (s) {
-        int len = strlen(s);
-        p = snewn(len + 1, char);
-        strcpy(p, s);
+        int len = strlen(s) + 1;
+        p = snewn(len, char);
+	szprintf(p, len, "%s", s);
     }
     return p;
 }
@@ -297,7 +298,7 @@ char *dupstr(const char *s)
 char *dupcat(const char *s1, ...)
 {
     int len;
-    char *p, *q, *sn;
+    char *p, *q, *e, *sn;
     va_list ap;
 
     len = strlen(s1);
@@ -311,16 +312,15 @@ char *dupcat(const char *s1, ...)
     va_end(ap);
 
     p = snewn(len + 1, char);
-    strcpy(p, s1);
-    q = p + strlen(p);
+    e = p + len + 1;
+    q = p + szprintf(p, len + 1, "%s", s1);
 
     va_start(ap, s1);
     while (1) {
 	sn = va_arg(ap, char *);
 	if (!sn)
 	    break;
-	strcpy(q, sn);
-	q += strlen(q);
+	q += szprintf(q, e - q, "%s", sn);
     }
     va_end(ap);
 
@@ -335,6 +335,7 @@ void burnstr(char *string)             /* sfree(str), only clear it first */
     }
 }
 
+#undef toint
 int toint(unsigned u)
 {
     /*
@@ -393,6 +394,9 @@ int toint(unsigned u)
  *    directive we don't know about, we should panic and die rather
  *    than run any risk.
  */
+#if _WINDOWS
+#define vsnprintf _vsnprintf
+#endif /* _WINDOWS */
 char *dupprintf(const char *fmt, ...)
 {
     char *ret;
@@ -411,9 +415,6 @@ char *dupvprintf(const char *fmt, va_list ap)
     size = 512;
 
     while (1) {
-#ifdef _WINDOWS
-#define vsnprintf _vsnprintf
-#endif
 #ifdef va_copy
 	/* Use the `va_copy' macro mandated by C99, if present.
 	 * XXX some environments may have this as __va_copy() */
@@ -447,6 +448,35 @@ char *dupvprintf(const char *fmt, va_list ap)
 	}
 	buf = sresize(buf, size, char);
     }
+}
+
+/*
+ * Like snprintf() except:
+ * - size must be > 0
+ * - always writes the terminating '\0', even on truncation
+ * - return value is strlen(buf) where buf[ret]=='\0'
+ *
+ * This supports the following safe buffer append paradigm:
+ *  char buf[N];
+ *  size_t pos = 0;
+ *  pos += szprintf(buf + pos, sizeof(buf) - pos, ...);
+ *    ...
+ *  pos += szprintf(buf + pos, sizeof(buf) - pos, ...);
+ */
+size_t szprintf(char* buf, size_t size, const char* fmt, ...) {
+  size_t len;
+  va_list ap;
+  if (size == 0) {
+    return 0;
+  }
+  va_start(ap, fmt);
+  len = vsnprintf(buf, size, fmt, ap);
+  va_end(ap);
+  if (len == (size_t)-1 || len >= size) {
+    len = size - 1;
+    buf[len] = '\0';
+  }
+  return len;
 }
 
 /*
@@ -541,10 +571,10 @@ void bufchain_clear(bufchain *ch)
 
 int bufchain_size(bufchain *ch)
 {
-    return ch->buffersize;
+    return (int)ch->buffersize;
 }
 
-void bufchain_add(bufchain *ch, const void *data, int len)
+void bufchain_add(bufchain *ch, const void *data, size_t len)
 {
     const char *buf = (const char *)data;
 
@@ -554,14 +584,14 @@ void bufchain_add(bufchain *ch, const void *data, int len)
 
     while (len > 0) {
 	if (ch->tail && ch->tail->bufend < ch->tail->bufmax) {
-	    int copylen = min(len, ch->tail->bufmax - ch->tail->bufend);
+	    size_t copylen = min(len, (size_t)(ch->tail->bufmax - ch->tail->bufend));
 	    memcpy(ch->tail->bufend, buf, copylen);
 	    buf += copylen;
 	    len -= copylen;
 	    ch->tail->bufend += copylen;
 	}
 	if (len > 0) {
-	    int grainlen =
+	    size_t grainlen =
 		max(sizeof(struct bufchain_granule) + len, BUFFER_MIN_GRANULE);
 	    struct bufchain_granule *newbuf;
 	    newbuf = smalloc(grainlen);
@@ -582,12 +612,12 @@ void bufchain_consume(bufchain *ch, int len)
 {
     struct bufchain_granule *tmp;
 
-    assert(ch->buffersize >= len);
+    assert((int)ch->buffersize >= len);
     while (len > 0) {
 	int remlen = len;
 	assert(ch->head != NULL);
 	if (remlen >= ch->head->bufend - ch->head->bufpos) {
-	    remlen = ch->head->bufend - ch->head->bufpos;
+	    remlen = (int)(ch->head->bufend - ch->head->bufpos);
 	    tmp = ch->head;
 	    ch->head = tmp->next;
 	    if (!ch->head)
@@ -602,7 +632,7 @@ void bufchain_consume(bufchain *ch, int len)
 
 void bufchain_prefix(bufchain *ch, void **data, int *len)
 {
-    *len = ch->head->bufend - ch->head->bufpos;
+    *len = (int)(ch->head->bufend - ch->head->bufpos);
     *data = ch->head->bufpos;
 }
 
@@ -613,13 +643,13 @@ void bufchain_fetch(bufchain *ch, void *data, int len)
 
     tmp = ch->head;
 
-    assert(ch->buffersize >= len);
+    assert((int)ch->buffersize >= len);
     while (len > 0) {
 	int remlen = len;
 
 	assert(tmp != NULL);
 	if (remlen >= tmp->bufend - tmp->bufpos)
-	    remlen = tmp->bufend - tmp->bufpos;
+	    remlen = (int)(tmp->bufend - tmp->bufpos);
 	memcpy(data_c, tmp->bufpos, remlen);
 
 	tmp = tmp->next;
@@ -682,12 +712,12 @@ void *safemalloc(size_t n, size_t size)
     if (!p) {
 	char str[200];
 #ifdef MALLOC_LOG
-	sprintf(str, "Out of memory! (%s:%d, size=%d)",
+	szprintf(str, sizeof(str), "Out of memory! (%s:%d, size=%d)",
 		mlog_file, mlog_line, size);
 	fprintf(fp, "*** %s\n", str);
 	fclose(fp);
 #else
-	strcpy(str, "Out of memory!");
+	szprintf(str, sizeof(str), "Out of memory!");
 #endif
 	modalfatalbox(str);
     }
@@ -729,7 +759,7 @@ void *saferealloc(void *ptr, size_t n, size_t size)
 	fprintf(fp, "*** %s\n", str);
 	fclose(fp);
 #else
-	strcpy(str, "Out of memory!");
+	szprintf(str, sizeof(str), "Out of memory!");
 #endif
 	modalfatalbox(str);
     }
@@ -795,7 +825,7 @@ void debug_memdump(void *buf, int len, int L)
 	dputs("  ");
 	if (L)
 	    debug_printf("%p: ", p);
-	strcpy(foo, "................");	/* sixteen dots */
+	szprintf(foo, sizeof(foo), "................"); /* sixteen dots */
 	for (i = 0; i < 16 && i < len; ++i) {
 	    if (&p[i] < (unsigned char *) buf) {
 		dputs("   ");	       /* 3 spaces */

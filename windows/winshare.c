@@ -5,14 +5,14 @@
 #include <stdio.h>
 #include <assert.h>
 
-#if !defined NO_SECURITY
-
 #define DEFINE_PLUG_METHOD_MACROS
 #include "tree234.h"
 #include "putty.h"
 #include "network.h"
 #include "proxy.h"
 #include "ssh.h"
+
+#if !defined NO_SECURITY
 
 #include "winsecur.h"
 
@@ -35,6 +35,7 @@ static char *obfuscate_name(const char *realname)
     unsigned char lenbuf[4];
     unsigned char digest[32];
     char retbuf[65];
+    size_t pos;
     int i;
 
     cryptlen = strlen(realname) + 1;
@@ -83,8 +84,8 @@ static char *obfuscate_name(const char *realname)
     /*
      * Finally, make printable.
      */
-    for (i = 0; i < 32; i++) {
-        sprintf(retbuf + 2*i, "%02x", digest[i]);
+    for (i = 0, pos = 0; i < 32; i++) {
+        pos += szprintf(retbuf + pos, sizeof(retbuf) - pos, "%02x", digest[i]);
         /* the last of those will also write the trailing NUL */
     }
 

@@ -3793,3 +3793,29 @@ int askappend(void *frontend, Filename *filename,
 
     return mbret;
 }
+
+int askoverwrite(void *frontend, const Filename *filename,
+	      void (*callback)(void *ctx, int result), void *ctx)
+{
+    static const char msgtemplate[] =
+	"\"%.*s\" already exists.\n"
+	"You can Overwrite the file or Quit.\n";
+    char *message;
+    char *mbtitle;
+    int mbret;
+
+    message = dupprintf(msgtemplate, FILENAME_MAX, filename->path);
+    mbtitle = dupprintf("%s Overwrite File", appname);
+
+    mbret = messagebox(get_window(frontend), mbtitle, message,
+		       string_width("LINE OF TEXT SUITABLE FOR THE"
+				    " ASKOVERWITE WIDTH"),
+		       "Overwrite", 'o', 1, 1,
+		       "Quit", 'q', -1, 0,
+		       NULL);
+
+    sfree(message);
+    sfree(mbtitle);
+
+    return mbret;
+}

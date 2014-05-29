@@ -302,14 +302,14 @@ static void serial_reconfig(void *handle, Conf *conf)
 /*
  * Called to send data down the serial connection.
  */
-static int serial_send(void *handle, char *buf, int len)
+static int serial_send(void *handle, char *buf, size_t len)
 {
     Serial serial = (Serial) handle;
 
     if (serial->out == NULL)
 	return 0;
 
-    serial->bufsize = handle_write(serial->out, buf, len);
+    serial->bufsize = handle_write(serial->out, buf, (int)len);
     return serial->bufsize;
 }
 

@@ -279,7 +279,7 @@ static void rlogin_reconfig(void *handle, Conf *conf)
 /*
  * Called to send data down the rlogin connection.
  */
-static int rlogin_send(void *handle, char *buf, int len)
+static int rlogin_send(void *handle, char *buf, size_t len)
 {
     Rlogin rlogin = (Rlogin) handle;
 
@@ -292,14 +292,14 @@ static int rlogin_send(void *handle, char *buf, int len)
          * directly to the network connection yet.
          */
         int ret = get_userpass_input(rlogin->prompt,
-                                     (unsigned char *)buf, len);
+                                     (unsigned char *)buf, (int)len);
         if (ret >= 0) {
             rlogin_startup(rlogin, rlogin->prompt->prompts[0]->result);
             /* that nulls out rlogin->prompt, so then we'll start sending
              * data down the wire in the obvious way */
         }
     } else {
-        rlogin->bufsize = sk_write(rlogin->s, buf, len);
+        rlogin->bufsize = sk_write(rlogin->s, buf, (int)len);
     }
 
     return rlogin->bufsize;

@@ -5,11 +5,11 @@
 #ifndef PUTTY_PUTTYPS_H
 #define PUTTY_PUTTYPS_H
 
-#ifdef _WINDOWS
+#if defined _WINDOWS
 
 #include "winstuff.h"
 
-#elif defined(MACOSX)
+#elif defined MACOSX
 
 #include "osx.h"
 

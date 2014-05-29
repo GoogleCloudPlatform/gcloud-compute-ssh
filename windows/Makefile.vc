@@ -108,15 +108,15 @@ MAKEFILE = Makefile.vc
 
 # C compilation flags
 CFLAGS = /nologo /W3 /O1 -I..\./ -I..\charset/ -I..\windows/ -I..\unix/ -I..\macosx/ /D_WINDOWS /D_WIN32_WINDOWS=0x500 /DWINVER=0x500
-LFLAGS = /incremental:no /fixed
+LFLAGS = /incremental:no /fixed $(LSECURE)
 RCFLAGS = -DWIN32 -D_WIN32 -DWINVER=0x0400
 
-CFLAGS = $(CFLAGS) /DHAS_GSSAPI /DSECURITY_WIN32
+CFLAGS = $(CFLAGS) /DHAS_GSSAPI /DSECURITY_WIN32 /GS /DYNAMICBASE /D_CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES /D_CRT_SECURE_NO_WARNINGS $(CSECURE)
 RCFLAGS = $(RCFLAGS) $(VER)
 
 
 all: pageant.exe plink.exe pscp.exe psftp.exe putty.exe puttygen.exe \
-		puttytel.exe
+		puttytel.exe pkeygen.exe
 
 pageant.exe: conf.obj misc.obj pageant.res sshaes.obj sshbn.obj sshdes.obj \
 		sshdss.obj sshmd5.obj sshpubk.obj sshrsa.obj sshsh256.obj \
@@ -193,10 +193,19 @@ puttygen.exe: conf.obj import.obj misc.obj notiming.obj puttygen.res \
 		sshaes.obj sshbn.obj sshdes.obj sshdss.obj sshdssg.obj \
 		sshmd5.obj sshprime.obj sshpubk.obj sshrand.obj sshrsa.obj \
 		sshrsag.obj sshsh256.obj sshsh512.obj sshsha.obj tree234.obj \
-		version.obj winctrls.obj winhelp.obj winmisc.obj \
+		version.obj winhelp.obj winmisc.obj \
 		winnoise.obj winnojmp.obj winpgen.obj winstore.obj \
 		wintime.obj winutils.obj puttygen.rsp
 	link $(LFLAGS) $(XLFLAGS) -out:puttygen.exe -map:puttygen.map @puttygen.rsp
+
+pkeygen.exe: conf.obj pkeygen.obj import.obj misc.obj notiming.obj pkeygen.res \
+		sshaes.obj sshbn.obj sshdes.obj sshdss.obj sshdssg.obj \
+		sshmd5.obj sshprime.obj sshpubk.obj sshrand.obj sshrsa.obj \
+		sshrsag.obj sshsh256.obj sshsh512.obj sshsha.obj tree234.obj \
+		version.obj winhandl.obj winhelp.obj winmisc.obj \
+		winnoise.obj winnojmp.obj winstore.obj \
+		wintime.obj winutils.obj wincons.obj pkeygen.rsp
+	link $(LFLAGS) $(XLFLAGS) -out:pkeygen.exe -map:pkeygen.map @pkeygen.rsp
 
 puttytel.exe: be_nos_s.obj callback.obj cmdline.obj conf.obj config.obj \
 		dialog.obj errsock.obj ldisc.obj ldiscucs.obj logging.obj \
@@ -325,6 +334,19 @@ puttygen.rsp: $(MAKEFILE)
 	echo winspool.lib winstore.obj wintime.obj >> puttygen.rsp
 	echo winutils.obj >> puttygen.rsp
 
+pkeygen.rsp: $(MAKEFILE)
+	echo /nologo /subsystem:console > pkeygen.rsp
+	echo advapi32.lib ws2_32.lib conf.obj >> pkeygen.rsp
+	echo pkeygen.obj import.obj misc.obj >> pkeygen.rsp
+	echo notiming.obj pkeygen.res shell32.lib >> pkeygen.rsp
+	echo sshaes.obj sshbn.obj sshdes.obj sshdss.obj >> pkeygen.rsp
+	echo sshdssg.obj sshmd5.obj sshprime.obj sshpubk.obj >> pkeygen.rsp
+	echo sshrand.obj sshrsa.obj sshrsag.obj sshsh256.obj >> pkeygen.rsp
+	echo sshsh512.obj sshsha.obj tree234.obj user32.lib >> pkeygen.rsp
+	echo version.obj winhandl.obj winhelp.obj winmisc.obj >> pkeygen.rsp
+	echo winnoise.obj winnojmp.obj >> pkeygen.rsp
+	echo winstore.obj wintime.obj wincons.obj >> pkeygen.rsp
+
 puttytel.rsp: $(MAKEFILE)
 	echo /nologo /subsystem:windows > puttytel.rsp
 	echo advapi32.lib be_nos_s.obj callback.obj >> puttytel.rsp
@@ -378,6 +400,12 @@ cmdgen.obj: ..\cmdgen.c ..\putty.h ..\ssh.h ..\puttyps.h ..\network.h \
 		..\windows\winstuff.h ..\macosx\osx.h ..\unix\unix.h \
 		..\windows\winhelp.h ..\charset\charset.h
 	cl $(COMPAT) $(CFLAGS) $(XFLAGS) /c ..\cmdgen.c
+
+pkeygen.obj: ..\cmdgen.c ..\putty.h ..\ssh.h ..\puttyps.h ..\network.h \
+		..\misc.h ..\puttymem.h ..\tree234.h ..\int64.h \
+		..\windows\winstuff.h ..\macosx\osx.h ..\unix\unix.h \
+		..\windows\winhelp.h ..\charset\charset.h
+	cl $(COMPAT) $(CFLAGS) $(XFLAGS) /DPKEYGEN /Fopkeygen.obj /c ..\cmdgen.c
 
 cmdline.obj: ..\cmdline.c ..\putty.h ..\puttyps.h ..\network.h ..\misc.h \
 		..\windows\winstuff.h ..\macosx\osx.h ..\unix\unix.h \
@@ -611,6 +639,10 @@ puttygen.res: *.c *.h *.rc ..\windows\puttygen.rc ..\windows\rcstuff.h \
 		..\windows\puttygen.ico ..\windows\version.rc2 \
 		..\windows\puttygen.mft
 	rc $(RCFL) -r $(RCFLAGS) ..\windows\puttygen.rc
+
+pkeygen.res: *.c *.h *.rc ..\windows\pkeygen.rc ..\windows\rcstuff.h \
+		..\windows\puttygen.ico ..\windows\version.rc2
+	rc $(RCFL) -r $(RCFLAGS) ..\windows\pkeygen.rc
 
 puttytel.res: *.c *.h *.rc ..\windows\puttytel.rc ..\windows\rcstuff.h \
 		..\windows\win_res.rc2 ..\windows\putty.mft \
@@ -1015,7 +1047,7 @@ winmisc.obj: ..\windows\winmisc.c ..\putty.h ..\puttyps.h ..\network.h \
 		..\misc.h ..\windows\winstuff.h ..\macosx\osx.h \
 		..\unix\unix.h ..\puttymem.h ..\tree234.h \
 		..\windows\winhelp.h ..\charset\charset.h
-	cl $(COMPAT) $(CFLAGS) $(XFLAGS) /c ..\windows\winmisc.c
+	cl $(COMPAT) $(CFLAGS) $(XFLAGS) $(ONLY) /c ..\windows\winmisc.c
 
 winnet.obj: ..\windows\winnet.c ..\putty.h ..\network.h ..\tree234.h \
 		..\puttyps.h ..\misc.h ..\windows\winstuff.h ..\macosx\osx.h \

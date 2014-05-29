@@ -213,14 +213,14 @@ static void raw_reconfig(void *handle, Conf *conf)
 /*
  * Called to send data down the raw connection.
  */
-static int raw_send(void *handle, char *buf, int len)
+static int raw_send(void *handle, char *buf, size_t len)
 {
     Raw raw = (Raw) handle;
 
     if (raw->s == NULL)
 	return 0;
 
-    raw->bufsize = sk_write(raw->s, buf, len);
+    raw->bufsize = sk_write(raw->s, buf, (int)len);
 
     return raw->bufsize;
 }

@@ -142,7 +142,7 @@ void UpdateSizeTip(HWND src, int cx, int cy)
 
     /* Generate the tip text */
 
-    sprintf(str, "%dx%d", cx, cy);
+    szprintf(str, sizeof(str), "%dx%d", cx, cy);
 
     if (!tip_wnd) {
 	HDC hdc;

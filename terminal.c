@@ -328,12 +328,12 @@ static void copy_termchar(termline *destline, int x, termchar *src)
 static void move_termchar(termline *line, termchar *dest, termchar *src)
 {
     /* First clear the cc list from the original char, just in case. */
-    clear_cc(line, dest - line->chars);
+    clear_cc(line, (int)(dest - line->chars));
 
     /* Move the character cell and adjust its cc_next. */
     *dest = *src;		       /* copy everything except cc-list */
     if (src->cc_next)
-	dest->cc_next = src->cc_next - (dest-src);
+	dest->cc_next = (int)(src->cc_next - (dest-src));
 
     /* Ensure the original cell doesn't have a cc list. */
     src->cc_next = 0;
@@ -829,7 +829,7 @@ static void readliteral_cc(struct buf *b, termchar *c, termline *ldata,
 {
     termchar n;
     unsigned long zstate;
-    int x = c - ldata->chars;
+    int x = (int)(c - ldata->chars);
 
     c->cc_next = 0;
 
@@ -3573,8 +3573,8 @@ static void term_out(Terminal *term)
 			if (term->ldisc) {
 			    if (term->esc_args[0] == 6) {
 				char buf[32];
-				sprintf(buf, "\033[%d;%dR", term->curs.y + 1,
-					term->curs.x + 1);
+				szprintf(buf, sizeof(buf), "\033[%d;%dR",
+					term->curs.y + 1, term->curs.x + 1);
 				ldisc_send(term->ldisc, buf, strlen(buf), 0);
 			    } else if (term->esc_args[0] == 5) {
 				ldisc_send(term->ldisc, "\033[0n", 4, 0);
@@ -3867,7 +3867,8 @@ static void term_out(Terminal *term)
 			    compatibility(OTHER);
 
 			    switch (term->esc_args[0]) {
-				int x, y, len;
+				size_t len;
+				int x, y;
 				char buf[80], *p;
 			      case 1:
 				set_iconic(term->frontend, FALSE);
@@ -3923,21 +3924,24 @@ static void term_out(Terminal *term)
 			      case 13:
 				if (term->ldisc) {
 				    get_window_pos(term->frontend, &x, &y);
-				    len = sprintf(buf, "\033[3;%d;%dt", x, y);
+				    len = szprintf(buf, sizeof(buf),
+						   "\033[3;%d;%dt", x, y);
 				    ldisc_send(term->ldisc, buf, len, 0);
 				}
 				break;
 			      case 14:
 				if (term->ldisc) {
 				    get_window_pixels(term->frontend, &x, &y);
-				    len = sprintf(buf, "\033[4;%d;%dt", y, x);
+				    len = szprintf(buf, sizeof(buf),
+						   "\033[4;%d;%dt", y, x);
 				    ldisc_send(term->ldisc, buf, len, 0);
 				}
 				break;
 			      case 18:
 				if (term->ldisc) {
-				    len = sprintf(buf, "\033[8;%d;%dt",
-						  term->rows, term->cols);
+				    len = szprintf(buf, sizeof(buf),
+						   "\033[8;%d;%dt",
+						   term->rows, term->cols);
 				    ldisc_send(term->ldisc, buf, len, 0);
 				}
 				break;
@@ -4215,16 +4219,20 @@ static void term_out(Terminal *term)
 
 			/* Change the response to CSI c */
 			if (term->esc_args[0] == 50) {
+			    size_t pos;
 			    int i;
-			    char lbuf[64];
-			    strcpy(term->id_string, "\033[?");
+			    pos = szprintf(term->id_string, sizeof(term->id_string), "\033[?");
 			    for (i = 1; i < term->esc_nargs; i++) {
 				if (i != 1)
-				    strcat(term->id_string, ";");
-				sprintf(lbuf, "%d", term->esc_args[i]);
-				strcat(term->id_string, lbuf);
+			            pos += szprintf(term->id_string + pos,
+						 sizeof(term->id_string) - pos,
+						 ";");
+			        pos += szprintf(term->id_string + pos,
+						sizeof(term->id_string) - pos,
+						"%d", term->esc_args[i]);
 			    }
-			    strcat(term->id_string, "c");
+			    szprintf(term->id_string + pos,
+				     sizeof(term->id_string) - pos, "c");
 			}
 #if 0
 			/* Is this a good idea ? 
@@ -5405,7 +5413,7 @@ static void clipme(Terminal *term, pos top, pos bottom, int rect, int desel)
 	while (poslt(top, bottom) && poslt(top, nlpos)) {
 #if 0
 	    char cbuf[16], *p;
-	    sprintf(cbuf, "<U+%04x>", (ldata[top.x] & 0xFFFF));
+	    szprintf(cbuf, sizeof(cbuf), "<U+%04x>", (ldata[top.x] & 0xFFFF));
 #else
 	    wchar_t cbuf[16], *p;
 	    int c;
@@ -5657,7 +5665,7 @@ static pos sel_spread_half(Terminal *term, pos p, int dir)
 	    if (q == ldata->chars + term->cols)
 		q--;
 	    if (p.x >= q - ldata->chars)
-		p.x = (dir == -1 ? q - ldata->chars : term->cols - 1);
+		p.x = (dir == -1 ? (int)(q - ldata->chars) : term->cols - 1);
 	}
 	break;
       case SM_WORD:
@@ -5898,7 +5906,7 @@ void term_mouse(Terminal *term, Mouse_Button braw, Mouse_Button bcooked,
 	(term->selstate != ABOUT_TO) && (term->selstate != DRAGGING)) {
 	int encstate = 0, r, c, wheel;
 	char abuf[32];
-	int len = 0;
+	size_t len = 0;
 
 	if (term->ldisc) {
 
@@ -5962,13 +5970,16 @@ void term_mouse(Terminal *term, Mouse_Button braw, Mouse_Button bcooked,
 
 	    /* Check the extensions in decreasing order of preference. Encoding the release event above assumes that 1006 comes first. */
 	    if (term->xterm_extended_mouse) {
-		len = sprintf(abuf, "\033[<%d;%d;%d%c", encstate, c, r, a == MA_RELEASE ? 'm' : 'M');
+		len = szprintf(abuf, sizeof(abuf), "\033[<%d;%d;%d%c",
+			      encstate, c, r, a == MA_RELEASE ? 'm' : 'M');
 	    } else if (term->urxvt_extended_mouse) {
-		len = sprintf(abuf, "\033[%d;%d;%dM", encstate + 32, c, r);
+		len = szprintf(abuf, sizeof(abuf), "\033[%d;%d;%dM",
+			      encstate + 32, c, r);
 	    } else if (c <= 223 && r <= 223) {
-		len = sprintf(abuf, "\033[M%c%c%c", encstate + 32, c + 32, r + 32);
+		len = szprintf(abuf, sizeof(abuf), "\033[M%c%c%c",
+			      encstate + 32, c + 32, r + 32);
 	    }
-	    ldisc_send(term->ldisc, abuf, len, 0);
+	    ldisc_send(term->ldisc, abuf, (int)len, 0);
 	}
 	return;
     }
@@ -6097,12 +6108,12 @@ void term_mouse(Terminal *term, Mouse_Button braw, Mouse_Button bcooked,
     term_update(term);
 }
 
-int format_arrow_key(char *buf, Terminal *term, int xkey, int ctrl)
+int format_arrow_key(char *buf, int buf_len, Terminal *term, int xkey, int ctrl)
 {
-    char *p = buf;
+    size_t pos = 0, len = buf_len;
 
     if (term->vt52_mode)
-	p += sprintf((char *) p, "\x1B%c", xkey);
+	pos = szprintf(buf, len, "\x1B%c", xkey);
     else {
 	int app_flg = (term->app_cursor_keys && !term->no_applic_c);
 #if 0
@@ -6125,12 +6136,12 @@ int format_arrow_key(char *buf, Terminal *term, int xkey, int ctrl)
 	    app_flg = !app_flg;
 
 	if (app_flg)
-	    p += sprintf((char *) p, "\x1BO%c", xkey);
+	    pos = szprintf(buf, len, "\x1BO%c", xkey);
 	else
-	    p += sprintf((char *) p, "\x1B[%c", xkey);
+	    pos = szprintf(buf, len, "\x1B[%c", xkey);
     }
 
-    return p - buf;
+    return (int)pos;
 }
 
 void term_nopaste(Terminal *term)
@@ -6171,7 +6182,7 @@ int term_ldisc(Terminal *term, int option)
     return FALSE;
 }
 
-int term_data(Terminal *term, int is_stderr, const char *data, int len)
+int term_data(Terminal *term, int is_stderr, const char *data, size_t len)
 {
     bufchain_add(&term->inbuf, data, len);
 
@@ -6215,9 +6226,9 @@ int term_data(Terminal *term, int is_stderr, const char *data, int len)
  * The only control character that should be honoured is \n (which
  * will behave as a CRLF).
  */
-int term_data_untrusted(Terminal *term, const char *data, int len)
+int term_data_untrusted(Terminal *term, const char *data, size_t len)
 {
-    int i;
+    size_t i;
     /* FIXME: more sophisticated checking? */
     for (i = 0; i < len; i++) {
 	if (data[i] == '\n')
@@ -6278,14 +6289,14 @@ int term_get_userpass_input(Terminal *term, prompts_t *p,
 	/* We only print the `name' caption if we have to... */
 	if (p->name_reqd && p->name) {
 	    size_t l = strlen(p->name);
-	    term_data_untrusted(term, p->name, l);
+	    term_data_untrusted(term, p->name, (int)l);
 	    if (p->name[l-1] != '\n')
 		term_data_untrusted(term, "\n", 1);
 	}
 	/* ...but we always print any `instruction'. */
 	if (p->instruction) {
 	    size_t l = strlen(p->instruction);
-	    term_data_untrusted(term, p->instruction, l);
+	    term_data_untrusted(term, p->instruction, (int)l);
 	    if (p->instruction[l-1] != '\n')
 		term_data_untrusted(term, "\n", 1);
 	}
@@ -6322,7 +6333,7 @@ int term_get_userpass_input(Terminal *term, prompts_t *p,
 	      case 10:
 	      case 13:
 		term_data(term, 0, "\r\n", 2);
-                prompt_ensure_result_size(pr, s->pos + 1);
+                prompt_ensure_result_size(pr, (int)s->pos + 1);
 		pr->result[s->pos] = '\0';
 		/* go to next prompt, if any */
 		s->curr_prompt++;
@@ -6360,7 +6371,7 @@ int term_get_userpass_input(Terminal *term, prompts_t *p,
 		 */
 		if (!pr->echo || (c >= ' ' && c <= '~') ||
 		     ((unsigned char) c >= 160)) {
-                    prompt_ensure_result_size(pr, s->pos + 1);
+                    prompt_ensure_result_size(pr, (int)(s->pos + 1));
 		    pr->result[s->pos++] = c;
 		    if (pr->echo)
 			term_data(term, 0, &c, 1);

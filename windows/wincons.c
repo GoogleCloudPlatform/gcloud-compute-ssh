@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <io.h>
 
 #include "putty.h"
 #include "storage.h"
@@ -246,6 +247,47 @@ int askappend(void *frontend, Filename *filename,
 }
 
 /*
+ * Ask whether to overwrite an existing file before.
+ * Returns 1 for append, 0 for cancel (don't overwrite).
+ */
+int askoverwrite(void* frontend, const Filename *filename,
+                 void (*callback)(void *ctx, int result), void *ctx)
+{
+    HANDLE hin;
+    DWORD savemode, i;
+
+    static const char msgtemplate[] =
+	"\"%-.*s\" already exists.\n"
+	"Overwrite (y/n)? ";
+
+    static const char msgtemplate_batch[] =
+	"\"%-.*s\" already exists.\n"
+	"Overwrite (y/n)? ";
+
+    char line[32];
+
+    if (console_batch_mode) {
+	fprintf(stderr, msgtemplate_batch, FILENAME_MAX, filename->path);
+	fflush(stderr);
+	return 0;
+    }
+    fprintf(stderr, msgtemplate, FILENAME_MAX, filename->path);
+    fflush(stderr);
+
+    hin = GetStdHandle(STD_INPUT_HANDLE);
+    GetConsoleMode(hin, &savemode);
+    SetConsoleMode(hin, (savemode | ENABLE_ECHO_INPUT |
+			 ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT));
+    ReadFile(hin, line, sizeof(line) - 1, &i, NULL);
+    SetConsoleMode(hin, savemode);
+
+    if (line[0] == 'y' || line[0] == 'Y')
+	return 1;
+    else
+	return 0;
+}
+
+/*
  * Warn about the obsolescent key file format.
  * 
  * Uniquely among these functions, this one does _not_ expect a
@@ -351,14 +393,14 @@ int console_get_userpass_input(prompts_t *p, unsigned char *in, int inlen)
     /* We only print the `name' caption if we have to... */
     if (p->name_reqd && p->name) {
 	size_t l = strlen(p->name);
-	console_data_untrusted(hout, p->name, l);
+	console_data_untrusted(hout, p->name, (int)l);
 	if (p->name[l-1] != '\n')
 	    console_data_untrusted(hout, "\n", 1);
     }
     /* ...but we always print any `instruction'. */
     if (p->instruction) {
 	size_t l = strlen(p->instruction);
-	console_data_untrusted(hout, p->instruction, l);
+	console_data_untrusted(hout, p->instruction, (int)l);
 	if (p->instruction[l-1] != '\n')
 	    console_data_untrusted(hout, "\n", 1);
     }
@@ -386,7 +428,7 @@ int console_get_userpass_input(prompts_t *p, unsigned char *in, int inlen)
 
             prompt_ensure_result_size(pr, len * 5 / 4 + 512);
 
-            r = ReadFile(hin, pr->result + len, pr->resultsize - len - 1,
+            r = ReadFile(hin, pr->result + len, (DWORD)(pr->resultsize - len - 1),
                          &ret, NULL);
 
             if (!r || ret == 0) {
@@ -426,3 +468,9 @@ void frontend_keypress(void *handle)
      */
     return;
 }
+
+int is_interactive(void)
+{
+    return _isatty(0);
+}
+

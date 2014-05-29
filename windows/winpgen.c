@@ -141,7 +141,7 @@ struct PassphraseProcStruct {
 /*
  * Dialog-box function for the passphrase box.
  */
-static int CALLBACK PassphraseProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK PassphraseProc(HWND hwnd, UINT msg,
 				   WPARAM wParam, LPARAM lParam)
 {
     static char **passphrase = NULL;
@@ -213,9 +213,9 @@ static int prompt_keyfile(HWND hwnd, char *dlgtitle,
     memset(&of, 0, sizeof(of));
     of.hwndOwner = hwnd;
     if (ppk) {
-	of.lpstrFilter = "PuTTY Private Key Files (*.ppk)\0*.ppk\0"
+	of.lpstrFilter = "PuTTY Private Key Files (*." PRIVATE_KEY_SUFFIX ")\0*." PRIVATE_KEY_SUFFIX "\0"
 	    "All Files (*.*)\0*\0\0\0";
-	of.lpstrDefExt = ".ppk";
+	of.lpstrDefExt = "." PRIVATE_KEY_SUFFIX;
     } else {
 	of.lpstrFilter = "All Files (*.*)\0*\0\0\0";
     }
@@ -233,7 +233,7 @@ static int prompt_keyfile(HWND hwnd, char *dlgtitle,
 /*
  * Dialog-box function for the Licence box.
  */
-static int CALLBACK LicenceProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK LicenceProc(HWND hwnd, UINT msg,
 				WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
@@ -272,7 +272,7 @@ static int CALLBACK LicenceProc(HWND hwnd, UINT msg,
 /*
  * Dialog-box function for the About box.
  */
-static int CALLBACK AboutProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK AboutProc(HWND hwnd, UINT msg,
 			      WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
@@ -406,8 +406,12 @@ static void setupbigedit2(HWND hwnd, int id, int idstatic,
 	i += n;
 	p += 4;
     }
-    *p++ = ' ';
-    strcpy(p, key->comment);
+    if (key->comment) {
+        *p++ = ' ';
+        strcpy(p, key->comment);
+    } else {
+	*p = '\0';
+    }
     SetDlgItemText(hwnd, id, buffer);
     SetDlgItemText(hwnd, idstatic, "&Public key for pasting into "
 		   "OpenSSH authorized_keys file:");
@@ -676,7 +680,7 @@ void load_key_file(HWND hwnd, struct MainDlgState *state,
             struct PassphraseProcStruct pps;
             pps.passphrase = &passphrase;
             pps.comment = comment;
-	    dlgret = DialogBoxParam(hinst,
+	    dlgret = (int)DialogBoxParam(hinst,
 				    MAKEINTRESOURCE(210),
 				    NULL, PassphraseProc,
 				    (LPARAM) &pps);
@@ -789,12 +793,13 @@ void load_key_file(HWND hwnd, struct MainDlgState *state,
 	 */
 	if (realtype != type && !was_import_cmd) {
 	    char msg[512];
-	    sprintf(msg, "Successfully imported foreign key\n"
-		    "(%s).\n"
-		    "To use this key with PuTTY, you need to\n"
-		    "use the \"Save private key\" command to\n"
-		    "save it in PuTTY's own format.",
-		    key_type_to_str(realtype));
+	    szprintf(msg, sizeof(msg),
+		     "Successfully imported foreign key\n"
+		     "(%s).\n"
+		     "To use this key with PuTTY, you need to\n"
+		     "use the \"Save private key\" command to\n"
+		     "save it in PuTTY's own format.",
+		     key_type_to_str(realtype));
 	    MessageBox(NULL, msg, "PuTTYgen Notice",
 		       MB_OK | MB_ICONINFORMATION);
 	}
@@ -805,7 +810,7 @@ void load_key_file(HWND hwnd, struct MainDlgState *state,
 /*
  * Dialog-box function for the main PuTTYgen dialog box.
  */
-static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 				WPARAM wParam, LPARAM lParam)
 {
     static const char generating_msg[] =
@@ -965,7 +970,7 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
 	state = (struct MainDlgState *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
 	if (state->collecting_entropy &&
 	    state->entropy && state->entropy_got < state->entropy_required) {
-	    state->entropy[state->entropy_got++] = lParam;
+	    state->entropy[state->entropy_got++] = (unsigned int)lParam;
 	    state->entropy[state->entropy_got++] = GetMessageTime();
 	    SendDlgItemMessage(hwnd, IDC_PROGRESS, PBM_SETPOS,
 			       state->entropy_got, 0);
@@ -1139,9 +1144,9 @@ static int CALLBACK MainDlgProc(HWND hwnd, UINT msg,
                 if (type != realtype &&
                     import_target_type(type) != realtype) {
                     char msg[256];
-                    sprintf(msg, "Cannot export an SSH-%d key in an SSH-%d"
-                            " format", (state->ssh2 ? 2 : 1),
-                            (state->ssh2 ? 1 : 2));
+                    szprintf(msg, sizeof(msg),
+			    "Cannot export an SSH-%d key in an SSH-%d  format",
+			    (state->ssh2 ? 2 : 1), (state->ssh2 ? 1 : 2));
 		    MessageBox(hwnd, msg,
                                "PuTTYgen Error", MB_OK | MB_ICONERROR);
 		    break;

@@ -569,7 +569,7 @@ int do_eventsel_loop(HANDLE other_event)
 		};
 		int e;
 
-		noise_ultralight(socket);
+		noise_ultralight((unsigned long)socket);
 		noise_ultralight(things.lNetworkEvents);
 
 		for (e = 0; e < lenof(eventtypes); e++)

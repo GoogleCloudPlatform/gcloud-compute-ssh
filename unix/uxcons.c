@@ -285,6 +285,52 @@ int askappend(void *frontend, Filename *filename,
 }
 
 /*
+ * Ask whether to overwrite an existing file before.
+ * Returns 1 for append, 0 for cancel (don't overwrite).
+ */
+int askoverwrite(void *frontend, const Filename *filename,
+	      void (*callback)(void *ctx, int result), void *ctx)
+{
+    static const char msgtemplate[] =
+	"\"%-.*s\" already exists.\n"
+	"Overwrite (y/n)? ";
+
+    static const char msgtemplate_batch[] =
+	"\"%-.*s\" already exists.\n"
+	"Overwrite (y/n)? ";
+
+    char line[32];
+    struct termios cf;
+
+    premsg(&cf);
+    if (console_batch_mode) {
+	fprintf(stderr, msgtemplate_batch, FILENAME_MAX, filename->path);
+	fflush(stderr);
+	return 0;
+    }
+    fprintf(stderr, msgtemplate, FILENAME_MAX, filename->path);
+    fflush(stderr);
+
+    {
+	struct termios oldmode, newmode;
+	tcgetattr(0, &oldmode);
+	newmode = oldmode;
+	newmode.c_lflag |= ECHO | ISIG | ICANON;
+	tcsetattr(0, TCSANOW, &newmode);
+	line[0] = '\0';
+	if (read(0, line, sizeof(line) - 1) <= 0)
+	    /* handled below */;
+	tcsetattr(0, TCSANOW, &oldmode);
+    }
+
+    postmsg(&cf);
+    if (line[0] == 'y' || line[0] == 'Y')
+	return 1;
+    else
+	return 0;
+}
+
+/*
  * Warn about the obsolescent key file format.
  * 
  * Uniquely among these functions, this one does _not_ expect a

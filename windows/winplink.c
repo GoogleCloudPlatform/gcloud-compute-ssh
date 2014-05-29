@@ -14,6 +14,8 @@
 
 #define WM_AGENT_CALLBACK (WM_APP + 4)
 
+static char* command_name;
+
 struct agent_callback {
     void (*callback)(void *, void *, int);
     void *callback_ctx;
@@ -75,7 +77,7 @@ void connection_fatal(void *frontend, char *p, ...)
 void cmdline_error(char *p, ...)
 {
     va_list ap;
-    fprintf(stderr, "plink: ");
+    fprintf(stderr, "%s: ", command_name);
     va_start(ap, p);
     vfprintf(stderr, p, ap);
     va_end(ap);
@@ -118,18 +120,18 @@ void ldisc_update(void *frontend, int echo, int edit)
 char *get_ttymode(void *frontend, const char *mode) { return NULL; }
 
 int from_backend(void *frontend_handle, int is_stderr,
-		 const char *data, int len)
+		 const char *data, size_t len)
 {
     if (is_stderr) {
-	handle_write(stderr_handle, data, len);
+	handle_write(stderr_handle, data, (int)len);
     } else {
-	handle_write(stdout_handle, data, len);
+	handle_write(stdout_handle, data, (int)len);
     }
 
     return handle_backlog(stdout_handle) + handle_backlog(stderr_handle);
 }
 
-int from_backend_untrusted(void *frontend_handle, const char *data, int len)
+int from_backend_untrusted(void *frontend_handle, const char *data, size_t len)
 {
     /*
      * No "untrusted" output should get here (the way the code is
@@ -174,7 +176,7 @@ static void usage(void)
 {
     printf("PuTTY Link: command-line connection utility\n");
     printf("%s\n", ver);
-    printf("Usage: plink [options] [user@]host [command]\n");
+    printf("Usage: %s [options] [user@]host [command]\n", command_name);
     printf("       (\"host\" can also be a PuTTY saved session name)\n");
     printf("Options:\n");
     printf("  -V        print version information and exit\n");
@@ -215,7 +217,7 @@ static void usage(void)
 
 static void version(void)
 {
-    printf("plink: %s\n", ver);
+    printf("%s: %s\n", command_name, ver);
     exit(1);
 }
 
@@ -301,8 +303,12 @@ int main(int argc, char **argv)
     int errors;
     int got_host = FALSE;
     int use_subsystem = 0;
+    int operands = 0;
+    int running_as_ssh;
     unsigned long now, next, then;
 
+    command_name = get_command_name(argv);
+    running_as_ssh = !stricmp(command_name, "ssh");
     sklist = NULL;
     skcount = sksize = 0;
     /*
@@ -322,7 +328,7 @@ int main(int argc, char **argv)
     default_protocol = conf_get_int(conf, CONF_protocol);
     default_port = conf_get_int(conf, CONF_port);
     errors = 0;
-    {
+    if (!running_as_ssh) {
 	/*
 	 * Override the default protocol if PLINK_PROTOCOL is set.
 	 */
@@ -339,17 +345,22 @@ int main(int argc, char **argv)
     }
     while (--argc) {
 	char *p = *++argv;
-	if (*p == '-') {
+	if (*p == '-' && !operands) {
 	    int ret = cmdline_process_param(p, (argc > 1 ? argv[1] : NULL),
 					    1, conf);
 	    if (ret == -2) {
 		fprintf(stderr,
-			"plink: option \"%s\" requires an argument\n", p);
+			"%s: option \"%s\" requires an argument\n",
+			command_name, p);
 		errors = 1;
+	    } else if (ret == 3) {
+		break;
 	    } else if (ret == 2) {
 		--argc, ++argv;
 	    } else if (ret == 1) {
 		continue;
+	    } else if (!strcmp(p, "--")) {
+		operands = 1;
 	    } else if (!strcmp(p, "-batch")) {
 		console_batch_mode = 1;
 	    } else if (!strcmp(p, "-s")) {
@@ -363,7 +374,8 @@ int main(int argc, char **argv)
                 pgp_fingerprints();
                 exit(1);
 	    } else {
-		fprintf(stderr, "plink: unknown option \"%s\"\n", p);
+		fprintf(stderr, "%s: unknown option \"%s\"\n",
+			command_name, p);
 		errors = 1;
 	    }
 	} else if (*p) {
@@ -553,6 +565,13 @@ int main(int argc, char **argv)
     }
 
     /*
+     * windows console TERM env var is problematic
+     * assert that here when running as ssh
+     */
+    if (running_as_ssh)
+        conf_set_str_str(conf, CONF_environmt, "TERM", "dumb");
+
+    /*
      * Perform command-line overrides on session configuration.
      */
     cmdline_run_saved(conf);
@@ -626,10 +645,11 @@ int main(int argc, char **argv)
     /*
      * Turn off ECHO and LINE input modes. We don't care if this
      * call fails, because we know we aren't necessarily running in
-     * a console.
+     * a console.  Also turn off PROCESSED_INPUT so e.g. ^C gets to the
+     * remote side.
      */
     GetConsoleMode(inhandle, &orig_console_mode);
-    SetConsoleMode(inhandle, ENABLE_PROCESSED_INPUT);
+    SetConsoleMode(inhandle, 0);
 
     /*
      * Pass the output handles to the handle-handling subsystem.
@@ -726,7 +746,7 @@ int main(int argc, char **argv)
                     };
                     int e;
 
-		    noise_ultralight(socket);
+		    noise_ultralight((unsigned long)socket);
 		    noise_ultralight(things.lNetworkEvents);
 
                     for (e = 0; e < lenof(eventtypes); e++)

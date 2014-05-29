@@ -960,7 +960,7 @@ void prefslist(struct prefslist *hdl, struct ctlpos *cp, int lines,
  */
 static void pl_moveitem(HWND hwnd, int listid, int src, int dst)
 {
-    int tlen, val;
+    LRESULT tlen, val;
     char *txt;
     /* Get the item's data. */
     tlen = SendDlgItemMessage (hwnd, listid, LB_GETTEXTLEN, src, 0);
@@ -1046,7 +1046,7 @@ int handle_prefslist(struct prefslist *hdl,
 		 * FIXME: this causes scrollbar glitches if the count of
 		 *        listbox contains >= its height. */
 		hdl->dummyitem =
-		    SendDlgItemMessage(hwnd, hdl->listid,
+		    (int)SendDlgItemMessage(hwnd, hdl->listid,
 				       LB_ADDSTRING, 0, (LPARAM) "");
 
                 hdl->srcitem = LBItemFromPt(dlm->hWnd, dlm->ptCursor, TRUE);
@@ -1099,11 +1099,11 @@ int handle_prefslist(struct prefslist *hdl,
              (HIWORD(wParam) == BN_DOUBLECLICKED))) {
             /* Move an item up or down the list. */
             /* Get the current selection, if any. */
-            int selection = SendDlgItemMessage (hwnd, hdl->listid, LB_GETCURSEL, 0, 0);
+            int selection = (int)SendDlgItemMessage (hwnd, hdl->listid, LB_GETCURSEL, 0, 0);
             if (selection == LB_ERR) {
                 MessageBeep(0);
             } else {
-                int nitems;
+                LRESULT nitems;
                 /* Get the total number of items. */
                 nitems = SendDlgItemMessage (hwnd, hdl->listid, LB_GETCOUNT, 0, 0);
                 /* Should we do anything? */
@@ -1121,7 +1121,7 @@ int handle_prefslist(struct prefslist *hdl,
     if (array) {
 	/* Update array to match the list box. */
 	for (i=0; i < maxmemb; i++)
-	    array[i] = SendDlgItemMessage (hwnd, hdl->listid, LB_GETITEMDATA,
+	    array[i] = (int)SendDlgItemMessage (hwnd, hdl->listid, LB_GETITEMDATA,
 					   i, 0);
     }
 
@@ -1808,9 +1808,9 @@ int winctrl_handle_command(struct dlgparam *dp, UINT msg,
 		int index, len;
 		char *text;
 
-		index = SendDlgItemMessage(dp->hwnd, c->base_id+1,
+		index = (int)SendDlgItemMessage(dp->hwnd, c->base_id+1,
 					   CB_GETCURSEL, 0, 0);
-		len = SendDlgItemMessage(dp->hwnd, c->base_id+1,
+		len = (int)SendDlgItemMessage(dp->hwnd, c->base_id+1,
 					 CB_GETLBTEXTLEN, index, 0);
 		text = snewn(len+1, char);
 		SendDlgItemMessage(dp->hwnd, c->base_id+1, CB_GETLBTEXT,
@@ -2174,7 +2174,7 @@ void dlg_listbox_addwithid(union control *ctrl, void *dlg,
 	   LB_ADDSTRING : CB_ADDSTRING);
     msg2 = (c->ctrl->generic.type==CTRL_LISTBOX && c->ctrl->listbox.height!=0 ?
 	   LB_SETITEMDATA : CB_SETITEMDATA);
-    index = SendDlgItemMessage(dp->hwnd, c->base_id+1, msg, 0, (LPARAM)text);
+    index = (int)SendDlgItemMessage(dp->hwnd, c->base_id+1, msg, 0, (LPARAM)text);
     SendDlgItemMessage(dp->hwnd, c->base_id+1, msg2, index, (LPARAM)id);
 }
 
@@ -2185,8 +2185,7 @@ int dlg_listbox_getid(union control *ctrl, void *dlg, int index)
     int msg;
     assert(c && c->ctrl->generic.type == CTRL_LISTBOX);
     msg = (c->ctrl->listbox.height != 0 ? LB_GETITEMDATA : CB_GETITEMDATA);
-    return
-	SendDlgItemMessage(dp->hwnd, c->base_id+1, msg, index, 0);
+    return (int)SendDlgItemMessage(dp->hwnd, c->base_id+1, msg, index, 0);
 }
 
 /* dlg_listbox_index returns <0 if no single element is selected. */
@@ -2198,12 +2197,12 @@ int dlg_listbox_index(union control *ctrl, void *dlg)
     assert(c && c->ctrl->generic.type == CTRL_LISTBOX);
     if (c->ctrl->listbox.multisel) {
 	assert(c->ctrl->listbox.height != 0); /* not combo box */
-	ret = SendDlgItemMessage(dp->hwnd, c->base_id+1, LB_GETSELCOUNT, 0, 0);
+	ret = (int)SendDlgItemMessage(dp->hwnd, c->base_id+1, LB_GETSELCOUNT, 0, 0);
 	if (ret == LB_ERR || ret > 1)
 	    return -1;
     }
     msg = (c->ctrl->listbox.height != 0 ? LB_GETCURSEL : CB_GETCURSEL);
-    ret = SendDlgItemMessage(dp->hwnd, c->base_id+1, msg, 0, 0);
+    ret = (int)SendDlgItemMessage(dp->hwnd, c->base_id+1, msg, 0, 0);
     if (ret == LB_ERR)
 	return -1;
     else
@@ -2217,8 +2216,7 @@ int dlg_listbox_issel(union control *ctrl, void *dlg, int index)
     assert(c && c->ctrl->generic.type == CTRL_LISTBOX &&
 	   c->ctrl->listbox.multisel &&
 	   c->ctrl->listbox.height != 0);
-    return
-	SendDlgItemMessage(dp->hwnd, c->base_id+1, LB_GETSEL, index, 0);
+    return (int)SendDlgItemMessage(dp->hwnd, c->base_id+1, LB_GETSEL, index, 0);
 }
 
 void dlg_listbox_select(union control *ctrl, void *dlg, int index)

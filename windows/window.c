@@ -79,7 +79,7 @@
 static Mouse_Button translate_button(Mouse_Button button);
 static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
-			unsigned char *output);
+			unsigned char *output, int outputlen);
 static void conftopalette(void);
 static void systopalette(void);
 static void init_palette(void);
@@ -257,7 +257,7 @@ static void start_backend(void)
     back->provide_logctx(backhandle, logctx);
     if (error) {
 	char *str = dupprintf("%s Error", appname);
-	sprintf(msg, "Unable to open connection to\n"
+	szprintf(msg, sizeof(msg), "Unable to open connection to\n"
 		"%.800s\n" "%s", conf_dest(conf), error);
 	MessageBox(NULL, msg, str, MB_ICONERROR | MB_OK);
 	sfree(str);
@@ -266,7 +266,7 @@ static void start_backend(void)
     window_name = icon_name = NULL;
     title = conf_get_str(conf, CONF_wintitle);
     if (!*title) {
-	sprintf(msg, "%s - %s", realhost, appname);
+	szprintf(msg, sizeof(msg), "%s - %s", realhost, appname);
 	title = msg;
     }
     sfree(realhost);
@@ -303,7 +303,7 @@ static void close_session(void *ignored_context)
     int i;
 
     session_closed = TRUE;
-    sprintf(morestuff, "%.70s (inactive)", appname);
+    szprintf(morestuff, sizeof(morestuff), "%.70s (inactive)", appname);
     set_icon(NULL, morestuff);
     set_title(NULL, morestuff);
 
@@ -900,8 +900,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
     }
 
     finished:
-    cleanup_exit(msg.wParam);	       /* this doesn't return... */
-    return msg.wParam;		       /* ... but optimiser doesn't know */
+    cleanup_exit((int)msg.wParam);    /* this doesn't return... */
+    return (int)msg.wParam;	      /* ... but optimiser doesn't know */
 }
 
 /*
@@ -1112,7 +1112,7 @@ void connection_fatal(void *frontend, char *fmt, ...)
     va_start(ap, fmt);
     stuff = dupvprintf(fmt, ap);
     va_end(ap);
-    sprintf(morestuff, "%.70s Fatal Error", appname);
+    szprintf(morestuff, sizeof(morestuff), "%.70s Fatal Error", appname);
     MessageBox(hwnd, stuff, morestuff, MB_ICONERROR | MB_OK);
     sfree(stuff);
 
@@ -1134,7 +1134,7 @@ void cmdline_error(char *fmt, ...)
     va_start(ap, fmt);
     stuff = dupvprintf(fmt, ap);
     va_end(ap);
-    sprintf(morestuff, "%.70s Command Line Error", appname);
+    szprintf(morestuff, sizeof(morestuff), "%.70s Command Line Error", appname);
     MessageBox(hwnd, stuff, morestuff, MB_ICONERROR | MB_OK);
     sfree(stuff);
     exit(1);
@@ -2137,12 +2137,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 			}
 		    }
 		    inherit_handles = TRUE;
-		    sprintf(c, "putty &%p:%u", filemap, (unsigned)size);
+		    szprintf(c, sizeof(c), "putty &%p:%u", filemap, (unsigned)size);
 		    cl = c;
 		} else if (wParam == IDM_SAVEDSESS) {
-		    unsigned int sessno = ((lParam - IDM_SAVED_MIN)
+		    LPARAM sessno = ((lParam - IDM_SAVED_MIN)
 					   / MENU_SAVED_STEP) + 1;
-		    if (sessno < (unsigned)sesslist.nsessions) {
+		    if (sessno < (LPARAM)sesslist.nsessions) {
 			char *session = sesslist.sessions[sessno];
 			cl = dupprintf("putty @%s", session);
 			inherit_handles = FALSE;
@@ -2267,8 +2267,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 
 		/* Enable or disable the scroll bar, etc */
 		{
-		    LONG nflg, flag = GetWindowLongPtr(hwnd, GWL_STYLE);
-		    LONG nexflag, exflag =
+		    LONG_PTR nflg, flag = GetWindowLongPtr(hwnd, GWL_STYLE);
+		    LONG_PTR nexflag, exflag =
 			GetWindowLongPtr(hwnd, GWL_EXSTYLE);
 
 		    nexflag = exflag;
@@ -2414,13 +2414,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 		SendMessage(hwnd, WM_SYSCOMMAND, IDM_SAVEDSESS, wParam);
 	    }
 	    if (wParam >= IDM_SPECIAL_MIN && wParam <= IDM_SPECIAL_MAX) {
-		int i = (wParam - IDM_SPECIAL_MIN) / 0x10;
+		WPARAM i = (wParam - IDM_SPECIAL_MIN) / 0x10;
 		/*
 		 * Ensure we haven't been sent a bogus SYSCOMMAND
 		 * which would cause us to reference invalid memory
 		 * and crash. Perhaps I'm just too paranoid here.
 		 */
-		if (i >= n_specials)
+		if (i >= (WPARAM)n_specials)
 		    break;
 		if (back)
 		    back->special(backhandle, specials[i].code);
@@ -2567,7 +2567,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	 * Add the mouse position and message time to the random
 	 * number noise.
 	 */
-	noise_ultralight(lParam);
+	noise_ultralight((unsigned long)lParam);
 
 	if (wParam & (MK_LBUTTON | MK_MBUTTON | MK_RBUTTON) &&
 	    GetCapture() == hwnd) {
@@ -2595,10 +2595,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 		last_mousemove = WM_NCMOUSEMOVE;
 	    }
 	}
-	noise_ultralight(lParam);
+	noise_ultralight((unsigned long)lParam);
 	break;
       case WM_IGNORE_CLIP:
-	ignore_clip = wParam;	       /* don't panic on DESTROYCLIPBOARD */
+	ignore_clip = (int)wParam;	       /* don't panic on DESTROYCLIPBOARD */
 	break;
       case WM_DESTROYCLIPBOARD:
 	if (!ignore_clip)
@@ -3047,7 +3047,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	 * Add the scan code and keypress timing to the random
 	 * number noise.
 	 */
-	noise_ultralight(lParam);
+	noise_ultralight((int)lParam);
 
 	/*
 	 * We don't do TranslateMessage since it disassociates the
@@ -3070,7 +3070,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 		    TranslateMessage(&m);
 		} else break; /* pass to Windows for default processing */
 	    } else {
-		len = TranslateKey(message, wParam, lParam, buf);
+		len = TranslateKey(message, wParam, lParam, buf, sizeof(buf));
 		if (len == -1)
 		    return DefWindowProc(hwnd, message, wParam, lParam);
 
@@ -3155,8 +3155,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	if (wParam & 0xFF00) {
 	    unsigned char buf[2];
 
-	    buf[1] = wParam;
-	    buf[0] = wParam >> 8;
+	    buf[1] = (unsigned char)wParam;
+	    buf[0] = (unsigned char)(wParam >> 8);
 	    term_seen_key_event(term);
 	    if (ldisc)
 		lpage_send(ldisc, kbd_codepage, buf, 2, 1);
@@ -3200,7 +3200,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	}
 	return 0;
       case WM_GOT_CLIPDATA:
-	if (process_clipdata((HGLOBAL)lParam, wParam))
+	if (process_clipdata((HGLOBAL)lParam, (int)wParam))
 	    term_do_paste(term);
 	return 0;
       default:
@@ -3897,12 +3897,13 @@ static void init_winfuncs(void)
  * to indicate a NUL-terminated "special" string.
  */
 static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
-			unsigned char *output)
+			unsigned char *output, int output_len)
 {
     BYTE keystate[256];
     int scan, left_alt = 0, key_down, shift_state;
     int r, i, code;
     unsigned char *p = output;
+    unsigned char *e = output + output_len;
     static int alt_sum = 0;
     int funky_type = conf_get_int(conf, CONF_funky_type);
     int no_applic_k = conf_get_int(conf, CONF_no_applic_k);
@@ -4171,31 +4172,31 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    switch (wParam) {
 	      case VK_NUMPAD1:
 		*p++ = "bB\002\002"[shift_state & 3];
-		return p - output;
+		return (int)(p - output);
 	      case VK_NUMPAD2:
 		*p++ = "jJ\012\012"[shift_state & 3];
-		return p - output;
+		return (int)(p - output);
 	      case VK_NUMPAD3:
 		*p++ = "nN\016\016"[shift_state & 3];
-		return p - output;
+		return (int)(p - output);
 	      case VK_NUMPAD4:
 		*p++ = "hH\010\010"[shift_state & 3];
-		return p - output;
+		return (int)(p - output);
 	      case VK_NUMPAD5:
 		*p++ = shift_state ? '.' : '.';
-		return p - output;
+		return (int)(p - output);
 	      case VK_NUMPAD6:
 		*p++ = "lL\014\014"[shift_state & 3];
-		return p - output;
+		return (int)(p - output);
 	      case VK_NUMPAD7:
 		*p++ = "yY\031\031"[shift_state & 3];
-		return p - output;
+		return (int)(p - output);
 	      case VK_NUMPAD8:
 		*p++ = "kK\013\013"[shift_state & 3];
-		return p - output;
+		return (int)(p - output);
 	      case VK_NUMPAD9:
 		*p++ = "uU\025\025"[shift_state & 3];
-		return p - output;
+		return (int)(p - output);
 	    }
 	}
 
@@ -4288,12 +4289,12 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    if (xkey) {
 		if (term->vt52_mode) {
 		    if (xkey >= 'P' && xkey <= 'S')
-			p += sprintf((char *) p, "\x1B%c", xkey);
+			p += szprintf((char* )p, e - p, "\x1B%c", xkey);
 		    else
-			p += sprintf((char *) p, "\x1B?%c", xkey);
+			p += szprintf((char* )p, e - p, "\x1B?%c", xkey);
 		} else
-		    p += sprintf((char *) p, "\x1BO%c", xkey);
-		return p - output;
+		    p += szprintf((char* )p, e - p, "\x1BO%c", xkey);
+		return (int)(p - output);
 	    }
 	}
 
@@ -4312,15 +4313,15 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    *p++ = 0x1B;
 	    *p++ = '[';
 	    *p++ = 'Z';
-	    return p - output;
+	    return (int)(p - output);
 	}
 	if (wParam == VK_SPACE && shift_state == 2) {	/* Ctrl-Space */
 	    *p++ = 0;
-	    return p - output;
+	    return (int)(p - output);
 	}
 	if (wParam == VK_SPACE && shift_state == 3) {	/* Ctrl-Shift-Space */
 	    *p++ = 160;
-	    return p - output;
+	    return (int)(p - output);
 	}
 	if (wParam == VK_CANCEL && shift_state == 2) {	/* Ctrl-Break */
 	    if (back)
@@ -4335,24 +4336,24 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	/* Control-2 to Control-8 are special */
 	if (shift_state == 2 && wParam >= '2' && wParam <= '8') {
 	    *p++ = "\000\033\034\035\036\037\177"[wParam - '2'];
-	    return p - output;
+	    return (int)(p - output);
 	}
 	if (shift_state == 2 && (wParam == 0xBD || wParam == 0xBF)) {
 	    *p++ = 0x1F;
-	    return p - output;
+	    return (int)(p - output);
 	}
 	if (shift_state == 2 && (wParam == 0xDF || wParam == 0xDC)) {
 	    *p++ = 0x1C;
-	    return p - output;
+	    return (int)(p - output);
 	}
 	if (shift_state == 3 && wParam == 0xDE) {
 	    *p++ = 0x1E;	       /* Ctrl-~ == Ctrl-^ in xterm at least */
-	    return p - output;
+	    return (int)(p - output);
 	}
 	if (shift_state == 0 && wParam == VK_RETURN && term->cr_lf_return) {
 	    *p++ = '\r';
 	    *p++ = '\n';
-	    return p - output;
+	    return (int)(p - output);
 	}
 
 	/*
@@ -4452,8 +4453,8 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    code = "\0\2\1\4\5\3\6"[code];
 
 	if (term->vt52_mode && code > 0 && code <= 6) {
-	    p += sprintf((char *) p, "\x1B%c", " HLMEIG"[code]);
-	    return p - output;
+	    p += szprintf((char* )p, e - p, "\x1B%c", " HLMEIG"[code]);
+	    return (int)(p - output);
 	}
 
 	if (funky_type == FUNKY_SCO && code >= 11 && code <= 34) {
@@ -4476,8 +4477,8 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    }
 	    if (keystate[VK_SHIFT] & 0x80) index += 12;
 	    if (keystate[VK_CONTROL] & 0x80) index += 24;
-	    p += sprintf((char *) p, "\x1B[%c", codes[index]);
-	    return p - output;
+	    p += szprintf((char* )p, e - p, "\x1B[%c", codes[index]);
+	    return (int)(p - output);
 	}
 	if (funky_type == FUNKY_SCO &&     /* SCO small keypad */
 	    code >= 1 && code <= 6) {
@@ -4485,9 +4486,9 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    if (code == 3) {
 		*p++ = '\x7F';
 	    } else {
-		p += sprintf((char *) p, "\x1B[%c", codes[code-1]);
+		p += szprintf((char* )p, e - p, "\x1B[%c", codes[code-1]);
 	    }
-	    return p - output;
+	    return (int)(p - output);
 	}
 	if ((term->vt52_mode || funky_type == FUNKY_VT100P) && code >= 11 && code <= 24) {
 	    int offt = 0;
@@ -4496,31 +4497,31 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    if (code > 21)
 		offt++;
 	    if (term->vt52_mode)
-		p += sprintf((char *) p, "\x1B%c", code + 'P' - 11 - offt);
+		p += szprintf((char* )p, e - p, "\x1B%c", code + 'P' - 11 - offt);
 	    else
 		p +=
-		    sprintf((char *) p, "\x1BO%c", code + 'P' - 11 - offt);
-	    return p - output;
+		    szprintf((char* )p, e - p, "\x1BO%c", code + 'P' - 11 - offt);
+	    return (int)(p - output);
 	}
 	if (funky_type == FUNKY_LINUX && code >= 11 && code <= 15) {
-	    p += sprintf((char *) p, "\x1B[[%c", code + 'A' - 11);
-	    return p - output;
+	    p += szprintf((char* )p, e - p, "\x1B[[%c", code + 'A' - 11);
+	    return (int)(p - output);
 	}
 	if (funky_type == FUNKY_XTERM && code >= 11 && code <= 14) {
 	    if (term->vt52_mode)
-		p += sprintf((char *) p, "\x1B%c", code + 'P' - 11);
+		p += szprintf((char* )p, e - p, "\x1B%c", code + 'P' - 11);
 	    else
-		p += sprintf((char *) p, "\x1BO%c", code + 'P' - 11);
-	    return p - output;
+		p += szprintf((char* )p, e - p, "\x1BO%c", code + 'P' - 11);
+	    return (int)(p - output);
 	}
 	if ((code == 1 || code == 4) &&
 	    conf_get_int(conf, CONF_rxvt_homeend)) {
-	    p += sprintf((char *) p, code == 1 ? "\x1B[H" : "\x1BOw");
-	    return p - output;
+	    p += szprintf((char* )p, e - p, code == 1 ? "\x1B[H" : "\x1BOw");
+	    return (int)(p - output);
 	}
 	if (code) {
-	    p += sprintf((char *) p, "\x1B[%d~", code);
-	    return p - output;
+	    p += szprintf((char* )p, e - p, "\x1B[%d~", code);
+	    return (int)(p - output);
 	}
 
 	/*
@@ -4547,8 +4548,9 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 		break;
 	    }
 	    if (xkey) {
-		p += format_arrow_key(p, term, xkey, shift_state);
-		return p - output;
+		p += format_arrow_key(p, (int)((output + output_len) - p),
+				      term, xkey, shift_state);
+		return (int)(p - output);
 	    }
 	}
 
@@ -4563,7 +4565,7 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	}
 
 	if (left_alt && wParam >= VK_NUMPAD0 && wParam <= VK_NUMPAD9)
-	    alt_sum = alt_sum * 10 + wParam - VK_NUMPAD0;
+	    alt_sum = alt_sum * 10 + (int)wParam - VK_NUMPAD0;
 	else
 	    alt_sum = 0;
     }
@@ -4584,7 +4586,7 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	 * be is? There's indication on MS' website of an Inquire/InquireEx
 	 * functioning returning a KBINFO structure which tells us. */
 	if (osVersion.dwPlatformId == VER_PLATFORM_WIN32_NT && p_ToUnicodeEx) {
-	    r = p_ToUnicodeEx(wParam, scan, keystate, keys_unicode,
+	    r = p_ToUnicodeEx((int)wParam, scan, keystate, keys_unicode,
                               lenof(keys_unicode), 0, kbd_layout);
 	} else {
 	    /* XXX 'keys' parameter is declared in MSDN documentation as
@@ -4600,7 +4602,7 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    int i;
 	    static WORD keys[3];
 	    static BYTE keysb[3];
-	    r = ToAsciiEx(wParam, scan, keystate, keys, 0, kbd_layout);
+	    r = ToAsciiEx((int)wParam, scan, keystate, keys, 0, kbd_layout);
 	    if (r > 0) {
 	        for (i = 0; i < r; i++) {
 	            keysb[i] = (BYTE)keys[i];
@@ -4708,7 +4710,7 @@ static int TranslateKey(UINT message, WPARAM wParam, LPARAM lParam,
 	    /* This is so the ALT-Numpad and dead keys work correctly. */
 	    keys_unicode[0] = 0;
 
-	    return p - output;
+	    return (int)(p - output);
 	}
 	/* If we're definitly not building up an ALT-54321 then clear it */
 	if (!left_alt)
@@ -4922,9 +4924,10 @@ void write_clip(void *frontend, wchar_t * data, int *attr, int len, int must_des
 	char *rtf = NULL;
 	unsigned char *tdata = (unsigned char *)lock2;
 	wchar_t *udata = (wchar_t *)lock;
-	int rtflen = 0, uindex = 0, tindex = 0;
-	int rtfsize = 0;
-	int multilen, blen, alen, totallen, i;
+	size_t rtflen = 0, rtfsize = 0;
+	int uindex = 0, tindex = 0;
+	size_t blen, alen, totallen;
+	int multilen, i;
 	char before[16], after[4];
 	int fgcolour,  lastfgcolour  = 0;
 	int bgcolour,  lastbgcolour  = 0;
@@ -4938,7 +4941,8 @@ void write_clip(void *frontend, wchar_t * data, int *attr, int len, int must_des
 
 	rtfsize = 100 + strlen(font->name);
 	rtf = snewn(rtfsize, char);
-	rtflen = sprintf(rtf, "{\\rtf1\\ansi\\deff0{\\fonttbl\\f0\\fmodern %s;}\\f0\\fs%d",
+	rtflen = szprintf(rtf, rtfsize,
+			 "{\\rtf1\\ansi\\deff0{\\fonttbl\\f0\\fmodern %s;}\\f0\\fs%d",
 			 font->name, font->height*2);
 
 	/*
@@ -4992,17 +4996,21 @@ void write_clip(void *frontend, wchar_t * data, int *attr, int len, int must_des
 	    /*
 	     * Finally - Write the colour table
 	     */
-	    rtf = sresize(rtf, rtfsize + (numcolours * 25), char);
-	    strcat(rtf, "{\\colortbl ;");
-	    rtflen = strlen(rtf);
+	    rtfsize += numcolours * 25;
+	    rtf = sresize(rtf, rtfsize, char);
+	    rtflen += szprintf(rtf + rtflen, rtfsize - rtflen,
+			      "%s", "{\\colortbl ;");
 
 	    for (i = 0; i < NALLCOLOURS; i++) {
 		if (palette[i] != 0) {
-		    rtflen += sprintf(&rtf[rtflen], "\\red%d\\green%d\\blue%d;", defpal[i].rgbtRed, defpal[i].rgbtGreen, defpal[i].rgbtBlue);
+		    rtflen += szprintf(rtf + rtflen, rtfsize - rtflen,
+		    		      "\\red%d\\green%d\\blue%d;",
+				      defpal[i].rgbtRed,
+				      defpal[i].rgbtGreen,
+				      defpal[i].rgbtBlue);
 		}
 	    }
-	    strcpy(&rtf[rtflen], "}");
-	    rtflen ++;
+	    rtflen += szprintf(rtf + rtflen, rtfsize - rtflen, "%s", "}");
 	}
 
 	/*
@@ -5101,22 +5109,22 @@ void write_clip(void *frontend, wchar_t * data, int *attr, int len, int must_des
                  */
 		if (lastfgcolour != fgcolour) {
                     lastfgcolour  = fgcolour;
-		    rtflen       += sprintf(&rtf[rtflen], "\\cf%d ", (fgcolour >= 0) ? palette[fgcolour] : 0);
+		    rtflen       += szprintf(rtf + rtflen, rtfsize - rtflen, "\\cf%d ", (fgcolour >= 0) ? palette[fgcolour] : 0);
                 }
 
                 if (lastbgcolour != bgcolour) {
                     lastbgcolour  = bgcolour;
-                    rtflen       += sprintf(&rtf[rtflen], "\\highlight%d ", (bgcolour >= 0) ? palette[bgcolour] : 0);
+                    rtflen       += szprintf(rtf + rtflen, rtfsize - rtflen, "\\highlight%d ", (bgcolour >= 0) ? palette[bgcolour] : 0);
                 }
 
 		if (lastAttrBold != attrBold) {
 		    lastAttrBold  = attrBold;
-		    rtflen       += sprintf(&rtf[rtflen], "%s", attrBold ? "\\b " : "\\b0 ");
+		    rtflen       += szprintf(rtf + rtflen, rtfsize - rtflen, "%s", attrBold ? "\\b " : "\\b0 ");
 		}
 
                 if (lastAttrUnder != attrUnder) {
                     lastAttrUnder  = attrUnder;
-                    rtflen        += sprintf(&rtf[rtflen], "%s", attrUnder ? "\\ul " : "\\ulnone ");
+                    rtflen        += szprintf(rtf + rtflen, rtfsize - rtflen, "%s", attrUnder ? "\\ul " : "\\ulnone ");
                 }
 	    }
 
@@ -5129,11 +5137,12 @@ void write_clip(void *frontend, wchar_t * data, int *attr, int len, int must_des
 		multilen = WideCharToMultiByte(CP_ACP, 0, unitab+uindex, 1,
 					       NULL, 0, NULL, NULL);
 		if (multilen != 1) {
-		    blen = sprintf(before, "{\\uc%d\\u%d", multilen,
-				   udata[uindex]);
-		    alen = 1; strcpy(after, "}");
+		    blen = szprintf(before, sizeof(before), "{\\uc%d\\u%d",
+				    multilen, udata[uindex]);
+		    alen = szprintf(after, sizeof(after), "%s", "}");
 		} else {
-		    blen = sprintf(before, "\\u%d", udata[uindex]);
+		    blen = szprintf(before, sizeof(before), "\\u%d",
+				    udata[uindex]);
 		    alen = 0; after[0] = '\0';
 		}
 	    }
@@ -5165,22 +5174,21 @@ void write_clip(void *frontend, wchar_t * data, int *attr, int len, int must_des
 		    rtf[rtflen++] = '\\';
 		    rtf[rtflen++] = tdata[tindex+i];
 		} else if (tdata[tindex+i] == 0x0D || tdata[tindex+i] == 0x0A) {
-		    rtflen += sprintf(rtf+rtflen, "\\par\r\n");
+		    rtflen += szprintf(rtf + rtflen, rtfsize - rtflen, "\\par\r\n");
 		} else if (tdata[tindex+i] > 0x7E || tdata[tindex+i] < 0x20) {
-		    rtflen += sprintf(rtf+rtflen, "\\'%02x", tdata[tindex+i]);
+		    rtflen += szprintf(rtf + rtflen, rtfsize - rtflen, "\\'%02x", tdata[tindex+i]);
 		} else {
-		    rtf[rtflen++] = tdata[tindex+i];
+		    rtflen += szprintf(rtf + rtflen, rtfsize - rtflen, "%c", tdata[tindex+i]);
 		}
 	    }
-	    strcpy(rtf + rtflen, after); rtflen += alen;
+	    rtflen += szprintf(rtf + rtflen, rtfsize - rtflen, "%s", after);
 
 	    tindex += multilen;
 	    uindex++;
 	}
 
-        rtf[rtflen++] = '}';	       /* Terminate RTF stream */
-        rtf[rtflen++] = '\0';
-        rtf[rtflen++] = '\0';
+        /* Terminate RTF stream -- szprintf() adds the last '\0' */
+	rtflen += szprintf(rtf + rtflen, rtfsize - rtflen, "}%c", '\0');
 
 	clipdata3 = GlobalAlloc(GMEM_DDESHARE | GMEM_MOVEABLE, rtflen);
 	if (clipdata3 && (lock3 = GlobalLock(clipdata3)) != NULL) {
@@ -5294,7 +5302,7 @@ void get_clip(void *frontend, wchar_t **p, int *len)
 {
     if (p) {
 	*p = clipboard_contents;
-	*len = clipboard_length;
+	*len = (int)clipboard_length;
     }
 }
 
@@ -5330,7 +5338,7 @@ void fatalbox(char *fmt, ...)
     va_start(ap, fmt);
     stuff = dupvprintf(fmt, ap);
     va_end(ap);
-    sprintf(morestuff, "%.70s Fatal Error", appname);
+    szprintf(morestuff, sizeof(morestuff), "%.70s Fatal Error", appname);
     MessageBox(hwnd, stuff, morestuff, MB_ICONERROR | MB_OK);
     sfree(stuff);
     cleanup_exit(1);
@@ -5347,7 +5355,7 @@ void modalfatalbox(char *fmt, ...)
     va_start(ap, fmt);
     stuff = dupvprintf(fmt, ap);
     va_end(ap);
-    sprintf(morestuff, "%.70s Fatal Error", appname);
+    szprintf(morestuff, sizeof(morestuff), "%.70s Fatal Error", appname);
     MessageBox(hwnd, stuff, morestuff,
 	       MB_SYSTEMMODAL | MB_ICONERROR | MB_OK);
     sfree(stuff);
@@ -5365,7 +5373,7 @@ void nonfatal(char *fmt, ...)
     va_start(ap, fmt);
     stuff = dupvprintf(fmt, ap);
     va_end(ap);
-    sprintf(morestuff, "%.70s Error", appname);
+    szprintf(morestuff, sizeof(morestuff), "%.70s Error", appname);
     MessageBox(hwnd, stuff, morestuff, MB_ICONERROR | MB_OK);
     sfree(stuff);
 }
@@ -5477,9 +5485,9 @@ void do_beep(void *frontend, int mode)
 		       SND_ASYNC | SND_FILENAME)) {
 	    char buf[sizeof(bell_wavefile->path) + 80];
 	    char otherbuf[100];
-	    sprintf(buf, "Unable to play sound file\n%s\n"
+	    szprintf(buf, sizeof(buf), "Unable to play sound file\n%s\n"
 		    "Using default sound instead", bell_wavefile->path);
-	    sprintf(otherbuf, "%.70s Sound Error", appname);
+	    szprintf(otherbuf, sizeof(otherbuf), "%.70s Sound Error", appname);
 	    MessageBox(hwnd, buf, otherbuf,
 		       MB_OK | MB_ICONEXCLAMATION);
 	    conf_set_int(conf, CONF_beep, BELL_DEFAULT);
@@ -5654,7 +5662,7 @@ static int get_fullscreen_rect(RECT * ss)
  */
 static void make_full_screen()
 {
-    DWORD style;
+    LONG_PTR style;
 	RECT ss;
 
     assert(IsZoomed(hwnd));
@@ -5695,7 +5703,7 @@ static void make_full_screen()
  */
 static void clear_full_screen()
 {
-    DWORD oldstyle, style;
+    LONG_PTR oldstyle, style;
 
     /* Reinstate the window furniture. */
     style = oldstyle = GetWindowLongPtr(hwnd, GWL_STYLE);
@@ -5749,12 +5757,12 @@ void frontend_keypress(void *handle)
     return;
 }
 
-int from_backend(void *frontend, int is_stderr, const char *data, int len)
+int from_backend(void *frontend, int is_stderr, const char *data, size_t len)
 {
     return term_data(term, is_stderr, data, len);
 }
 
-int from_backend_untrusted(void *frontend, const char *data, int len)
+int from_backend_untrusted(void *frontend, const char *data, size_t len)
 {
     return term_data_untrusted(term, data, len);
 }

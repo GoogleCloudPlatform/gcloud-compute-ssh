@@ -66,7 +66,7 @@ void force_normal(HWND hwnd)
     recurse = 0;
 }
 
-static int CALLBACK LogProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK LogProc(HWND hwnd, UINT msg,
 			    WPARAM wParam, LPARAM lParam)
 {
     int i;
@@ -98,7 +98,7 @@ static int CALLBACK LogProc(HWND hwnd, UINT msg,
 	  case IDN_COPY:
 	    if (HIWORD(wParam) == BN_CLICKED ||
 		HIWORD(wParam) == BN_DOUBLECLICKED) {
-		int selcount;
+		LRESULT selcount;
 		int *selitems;
 		selcount = SendDlgItemMessage(hwnd, IDN_LIST,
 					      LB_GETSELCOUNT, 0, 0);
@@ -109,7 +109,7 @@ static int CALLBACK LogProc(HWND hwnd, UINT msg,
 
 		selitems = snewn(selcount, int);
 		if (selitems) {
-		    int count = SendDlgItemMessage(hwnd, IDN_LIST,
+		    LRESULT count = SendDlgItemMessage(hwnd, IDN_LIST,
 						   LB_GETSELITEMS,
 						   selcount,
 						   (LPARAM) selitems);
@@ -161,7 +161,7 @@ static int CALLBACK LogProc(HWND hwnd, UINT msg,
     return 0;
 }
 
-static int CALLBACK LicenceProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK LicenceProc(HWND hwnd, UINT msg,
 				WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
@@ -187,7 +187,7 @@ static int CALLBACK LicenceProc(HWND hwnd, UINT msg,
     return 0;
 }
 
-static int CALLBACK AboutProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK AboutProc(HWND hwnd, UINT msg,
 			      WPARAM wParam, LPARAM lParam)
 {
     char *str;
@@ -237,8 +237,8 @@ static int SaneDialogBox(HINSTANCE hinst,
     WNDCLASS wc;
     HWND hwnd;
     MSG msg;
-    int flags;
-    int ret;
+    LONG_PTR flags;
+    LONG_PTR ret;
     int gm;
 
     wc.style = CS_DBLCLKS | CS_SAVEBITS | CS_BYTEALIGNWINDOW;
@@ -259,7 +259,7 @@ static int SaneDialogBox(HINSTANCE hinst,
     SetWindowLongPtr(hwnd, BOXRESULT, 0); /* result from SaneEndDialog */
 
     while ((gm=GetMessage(&msg, NULL, 0, 0)) > 0) {
-	flags=GetWindowLongPtr(hwnd, BOXFLAGS);
+	flags=GetWindowLongPtr(hwnd, (int)BOXFLAGS);
 	if (!(flags & DF_END) && !IsDialogMessage(hwnd, &msg))
 	    DispatchMessage(&msg);
 	if (flags & DF_END)
@@ -267,11 +267,11 @@ static int SaneDialogBox(HINSTANCE hinst,
     }
 
     if (gm == 0)
-        PostQuitMessage(msg.wParam); /* We got a WM_QUIT, pass it on */
+        PostQuitMessage((int)msg.wParam); /* We got a WM_QUIT, pass it on */
 
     ret=GetWindowLongPtr(hwnd, BOXRESULT);
     DestroyWindow(hwnd);
-    return ret;
+    return (int)ret;
 }
 
 static void SaneEndDialog(HWND hwnd, int ret)
@@ -283,7 +283,7 @@ static void SaneEndDialog(HWND hwnd, int ret)
 /*
  * Null dialog procedure.
  */
-static int CALLBACK NullDlgProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK NullDlgProc(HWND hwnd, UINT msg,
 				WPARAM wParam, LPARAM lParam)
 {
     return 0;
@@ -367,7 +367,7 @@ static void create_controls(HWND hwnd, char *path)
  * (Being a dialog procedure, in general it returns 0 if the default
  * dialog processing should be performed, and 1 if it should not.)
  */
-static int CALLBACK GenericMainDlgProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK GenericMainDlgProc(HWND hwnd, UINT msg,
 				       WPARAM wParam, LPARAM lParam)
 {
     HWND hw, treeview;
@@ -706,6 +706,7 @@ void logevent(void *frontend, const char *string)
 {
     char timebuf[40];
     struct tm tm;
+    int len;
 
     log_eventlog(logctx, string);
 
@@ -717,11 +718,11 @@ void logevent(void *frontend, const char *string)
     tm=ltime();
     strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S\t", &tm);
 
-    events[nevents] = snewn(strlen(timebuf) + strlen(string) + 1, char);
-    strcpy(events[nevents], timebuf);
-    strcat(events[nevents], string);
+    len = strlen(timebuf) + strlen(string) + 1;
+    events[nevents] = snewn(len, char);
+    szprintf(events[nevents], len, "%s%s", timebuf, string);
     if (logbox) {
-	int count;
+	LRESULT count;
 	SendDlgItemMessage(logbox, IDN_LIST, LB_ADDSTRING,
 			   0, (LPARAM) events[nevents]);
 	count = SendDlgItemMessage(logbox, IDN_LIST, LB_GETCOUNT, 0, 0);
@@ -886,6 +887,37 @@ int askappend(void *frontend, Filename *filename,
     if (mbret == IDYES)
 	return 2;
     else if (mbret == IDNO)
+	return 1;
+    else
+	return 0;
+}
+
+/*
+ * Ask whether to overwrite an existing file before.
+ * Returns 1 for append, 0 for cancel (don't overwrite).
+ */
+int askoverwite(void *frontend, Filename *filename,
+	      void (*callback)(void *ctx, int result), void *ctx)
+{
+    static const char msgtemplate[] =
+	"\"%.*s\" already exists.\n"
+	"Hit Yes to overwrite the file.\n";
+    char *message;
+    char *mbtitle;
+    int mbret;
+
+    message = dupprintf(msgtemplate, FILENAME_MAX, filename->path);
+    mbtitle = dupprintf("%s Overwrite File", appname);
+
+    mbret = MessageBox(NULL, message, mbtitle,
+		       MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON3);
+
+    socket_reselect_all();
+
+    sfree(message);
+    sfree(mbtitle);
+
+    if (mbret == IDYES)
 	return 1;
     else
 	return 0;

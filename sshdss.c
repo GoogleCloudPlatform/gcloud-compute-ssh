@@ -143,7 +143,8 @@ static char *dss_fmtkey(void *key)
 {
     struct dss_key *dss = (struct dss_key *) key;
     char *p;
-    int len, i, pos, nibbles;
+    size_t len, pos;
+    int i, nibbles;
     static const char hex[] = "0123456789abcdef";
     if (!dss->p)
 	return NULL;
@@ -156,29 +157,28 @@ static char *dss_fmtkey(void *key)
     if (!p)
 	return NULL;
 
-    pos = 0;
-    pos += sprintf(p + pos, "0x");
+    pos = szprintf(p, len, "0x");
     nibbles = (3 + bignum_bitcount(dss->p)) / 4;
     if (nibbles < 1)
 	nibbles = 1;
     for (i = nibbles; i--;)
 	p[pos++] =
 	    hex[(bignum_byte(dss->p, i / 2) >> (4 * (i % 2))) & 0xF];
-    pos += sprintf(p + pos, ",0x");
+    pos += szprintf(p + pos, len - pos, ",0x");
     nibbles = (3 + bignum_bitcount(dss->q)) / 4;
     if (nibbles < 1)
 	nibbles = 1;
     for (i = nibbles; i--;)
 	p[pos++] =
 	    hex[(bignum_byte(dss->q, i / 2) >> (4 * (i % 2))) & 0xF];
-    pos += sprintf(p + pos, ",0x");
+    pos += szprintf(p + pos, len - pos, ",0x");
     nibbles = (3 + bignum_bitcount(dss->g)) / 4;
     if (nibbles < 1)
 	nibbles = 1;
     for (i = nibbles; i--;)
 	p[pos++] =
 	    hex[(bignum_byte(dss->g, i / 2) >> (4 * (i % 2))) & 0xF];
-    pos += sprintf(p + pos, ",0x");
+    pos += szprintf(p + pos, len - pos, ",0x");
     nibbles = (3 + bignum_bitcount(dss->y)) / 4;
     if (nibbles < 1)
 	nibbles = 1;
@@ -195,7 +195,7 @@ static char *dss_fingerprint(void *key)
     struct MD5Context md5c;
     unsigned char digest[16], lenbuf[4];
     char buffer[16 * 3 + 40];
-    char *ret;
+    size_t pos;
     int numlen, i;
 
     MD5Init(&md5c);
@@ -216,14 +216,11 @@ static char *dss_fingerprint(void *key)
 
     MD5Final(digest, &md5c);
 
-    sprintf(buffer, "ssh-dss %d ", bignum_bitcount(dss->p));
+    pos = szprintf(buffer, sizeof(buffer), "ssh-dss %d ", bignum_bitcount(dss->p));
     for (i = 0; i < 16; i++)
-	sprintf(buffer + strlen(buffer), "%s%02x", i ? ":" : "",
+	pos += szprintf(buffer + pos, sizeof(buffer) - pos, "%s%02x", i ? ":" : "",
 		digest[i]);
-    ret = snewn(strlen(buffer) + 1, char);
-    if (ret)
-	strcpy(ret, buffer);
-    return ret;
+    return dupstr(buffer);
 }
 
 static int dss_verifysig(void *key, char *sig, int siglen,

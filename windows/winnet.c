@@ -218,7 +218,7 @@ int sk_startup(int hi, int lo)
 #ifdef NET_SETUP_DIAGNOSTICS
     {
 	char buf[80];
-	sprintf(buf, "Using WinSock %d.%d", hi, lo);
+	szprintf(buf, sizeof(buf), "Using WinSock %d.%d", hi, lo);
 	logevent(NULL, buf);
     }
 #endif
@@ -458,20 +458,19 @@ char *winsock_error_string(int error)
     es = find234(errstrings, &error, errstring_find);
 
     if (!es) {
-        int bufsize, bufused;
+        size_t bufsize, pos;
 
         es = snew(struct errstring);
         es->error = error;
         /* maximum size for FormatMessage is 64K */
         bufsize = 65535 + sizeof(prefix);
         es->text = snewn(bufsize, char);
-        strcpy(es->text, prefix);
-        bufused = strlen(es->text);
+	pos = szprintf(es->text, bufsize, "%s", prefix);
         if (!FormatMessage((FORMAT_MESSAGE_FROM_SYSTEM |
                             FORMAT_MESSAGE_IGNORE_INSERTS), NULL, error,
                            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                           es->text + bufused, bufsize - bufused, NULL)) {
-            sprintf(es->text + bufused,
+                           es->text + pos, (DWORD)(bufsize - pos), NULL)) {
+            szprintf(es->text + pos, bufsize - pos,
                     "Windows error code %d (and FormatMessage returned %d)", 
                     error, GetLastError());
         } else {
@@ -674,7 +673,7 @@ void sk_getaddr(SockAddr addr, char *buf, int buflen)
 	int err = 0;
 	if (p_WSAAddressToStringA) {
 	    DWORD dwbuflen = buflen;
-	    err = p_WSAAddressToStringA(step.ai->ai_addr, step.ai->ai_addrlen,
+	    err = p_WSAAddressToStringA(step.ai->ai_addr, (DWORD)step.ai->ai_addrlen,
 					NULL, buf, &dwbuflen);
 	} else
 	    err = -1;
@@ -1580,7 +1579,7 @@ int select_result(WPARAM wParam, LPARAM lParam)
 	    return 1;
     }
 
-    noise_ultralight(lParam);
+    noise_ultralight((unsigned long)lParam);
 
     switch (WSAGETSELECTEVENT(lParam)) {
       case FD_CONNECT:

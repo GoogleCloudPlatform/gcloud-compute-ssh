@@ -552,7 +552,7 @@ int conf_deserialise(Conf *conf, void *vdata, int maxsize)
 		goto done;
 	    }
 	    entry->key.secondary.s = dupstr((char *)data);
-	    maxsize -= (zero + 1 - data);
+	    maxsize -= (int)(zero + 1 - data);
 	    data = zero + 1;
 	    break;
 	}
@@ -577,7 +577,7 @@ int conf_deserialise(Conf *conf, void *vdata, int maxsize)
 		goto done;
 	    }
 	    entry->value.u.stringval = dupstr((char *)data);
-	    maxsize -= (zero + 1 - data);
+	    maxsize -= (int)(zero + 1 - data);
 	    data = zero + 1;
 	    break;
 	  case TYPE_FILENAME:

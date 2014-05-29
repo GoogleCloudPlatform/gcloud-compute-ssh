@@ -37,7 +37,7 @@ static void pinger_schedule(Pinger pinger)
 
     next = schedule_timer(pinger->interval * TICKSPERSEC,
 			  pinger_timer, pinger);
-    if (!pinger->pending || next < pinger->next) {
+    if (!pinger->pending || next < (int)pinger->next) {
 	pinger->next = next;
 	pinger->pending = TRUE;
     }

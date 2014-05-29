@@ -855,7 +855,7 @@ static void telnet_reconfig(void *handle, Conf *conf)
 /*
  * Called to send data down the Telnet connection.
  */
-static int telnet_send(void *handle, char *buf, int len)
+static int telnet_send(void *handle, char *buf, size_t len)
 {
     Telnet telnet = (Telnet) handle;
     unsigned char *p, *end;
@@ -875,7 +875,7 @@ static int telnet_send(void *handle, char *buf, int len)
 
 	while (p < end && iswritable(*p))
 	    p++;
-	telnet->bufsize = sk_write(telnet->s, (char *)q, p - q);
+	telnet->bufsize = sk_write(telnet->s, (char *)q, (int)(p - q));
 
 	while (p < end && !iswritable(*p)) {
 	    telnet->bufsize = 

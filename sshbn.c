@@ -607,7 +607,7 @@ static void internal_add_shifted(BignumInt *number,
     addend = (BignumDblInt)n << bshift;
 
     while (addend) {
-        assert(word <= number[0]);
+        assert(word <= (int)number[0]);
 	addend += number[word];
 	number[word] = (BignumInt) addend & BIGNUM_INT_MASK;
 	addend >>= BIGNUM_INT_BITS;
@@ -1227,7 +1227,7 @@ int ssh1_read_bignum(const unsigned char *data, int len, Bignum * result)
 
     *result = bignum_from_bytes(p, b);
 
-    return p + b - data;
+    return (int)(p + b - data);
 }
 
 /*

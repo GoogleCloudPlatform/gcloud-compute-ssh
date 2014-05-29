@@ -774,7 +774,7 @@ SftpWildcardMatcher *sftp_begin_wildcard_matching(char *name)
     wildcard = stripslashes(name, 0);
 
     unwcdir = dupstr(name);
-    len = wildcard - name;
+    len = (int)(wildcard - name);
     unwcdir[len] = '\0';
     if (len > 0 && unwcdir[len-1] == '/')
 	unwcdir[len-1] = '\0';
@@ -1038,7 +1038,7 @@ int sftp_cmd_ls(struct sftp_command *cmd)
         sfree(unwcdir);
 	wildcard = stripslashes(dir, 0);
 	unwcdir = dupstr(dir);
-	len = wildcard - dir;
+	len = (int)(wildcard - dir);
 	unwcdir[len] = '\0';
 	if (len > 0 && unwcdir[len-1] == '/')
 	    unwcdir[len-1] = '\0';
@@ -2506,7 +2506,7 @@ void connection_fatal(void *frontend, char *fmt, ...)
     cleanup_exit(1);
 }
 
-void ldisc_send(void *handle, char *buf, int len, int interactive)
+void ldisc_send(void *handle, char *buf, size_t len, int interactive)
 {
     /*
      * This is only here because of the calls to ldisc_send(NULL,
@@ -2537,13 +2537,12 @@ void agent_schedule_callback(void (*callback)(void *, void *, int),
  */
 
 static unsigned char *outptr;	       /* where to put the data */
-static unsigned outlen;		       /* how much data required */
+static size_t outlen;		       /* how much data required */
 static unsigned char *pending = NULL;  /* any spare data */
-static unsigned pendlen = 0, pendsize = 0;	/* length and phys. size of buffer */
-int from_backend(void *frontend, int is_stderr, const char *data, int datalen)
+static size_t pendlen = 0, pendsize = 0;	/* length and phys. size of buffer */
+int from_backend(void *frontend, int is_stderr, const char *data, size_t len)
 {
     unsigned char *p = (unsigned char *) data;
-    unsigned len = (unsigned) datalen;
 
     /*
      * stderr data is just spouted to local stderr and otherwise
@@ -2563,7 +2562,7 @@ int from_backend(void *frontend, int is_stderr, const char *data, int datalen)
 	return 0;
 
     if ((outlen > 0) && (len > 0)) {
-	unsigned used = outlen;
+	size_t used = outlen;
 	if (used > len)
 	    used = len;
 	memcpy(outptr, p, used);
@@ -2584,7 +2583,7 @@ int from_backend(void *frontend, int is_stderr, const char *data, int datalen)
 
     return 0;
 }
-int from_backend_untrusted(void *frontend_handle, const char *data, int len)
+int from_backend_untrusted(void *frontend_handle, const char *data, size_t len)
 {
     /*
      * No "untrusted" output should get here (the way the code is
@@ -2616,7 +2615,7 @@ int sftp_recvdata(char *buf, int len)
      * need.
      */
     if (pendlen > 0) {
-	unsigned pendused = pendlen;
+	size_t pendused = pendlen;
 	if (pendused > outlen)
 	    pendused = outlen;
 	memcpy(outptr, pending, pendused);

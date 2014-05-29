@@ -7,6 +7,15 @@
 #include "putty.h"
 #include <security.h>
 
+/*
+ * runtime DLL API function state
+ */
+enum {
+  MODULE_STATUS_required, /* API not checked yet */
+  MODULE_STATUS_success,  /* API checked and present */
+  MODULE_STATUS_error     /* API checked and not present */
+};
+
 OSVERSIONINFO osVersion;
 
 char *platform_get_x_display(void) {
@@ -56,6 +65,7 @@ int filename_serialise(const Filename *f, void *vdata)
     }
     return len;
 }
+
 Filename *filename_deserialise(void *vdata, int maxsize, int *used)
 {
     char *data = (char *)vdata;
@@ -64,8 +74,114 @@ Filename *filename_deserialise(void *vdata, int maxsize, int *used)
     if (!end)
         return NULL;
     end++;
-    *used = end - data;
+    *used = (int)(end - data);
     return filename_from_str(data);
+}
+
+int filename_has_suffix(const Filename* filename, const char* suffix)
+{
+    char* s;
+    s = strrchr(filename->path, '.');
+    if (!s)
+	return 0;
+    return stricmp(s + 1, suffix) == 0;
+}
+
+#define NOTIFY_WIDTH    79	/* subtract 1 for nervous terminals */
+#define NOTIFY_BORDER   '@'
+
+/*
+ * ssh-ish painfully obvious notification box, line by line
+ * fmt==NULL prints head/tail border
+ */
+void notifyf(const char* fmt, ...)
+{
+    if (fmt) {
+        char* txt;
+	int len;
+        va_list ap;
+        va_start(ap, fmt);
+        txt = dupvprintf(fmt, ap);
+        va_end(ap);
+	len = (int)strlen(txt);
+	if (len > (NOTIFY_WIDTH - 2))
+	    len = NOTIFY_WIDTH - 2;
+	fprintf(stderr, "%c%*s%-.*s%*s%c\n", 
+		NOTIFY_BORDER,
+		(NOTIFY_WIDTH - len - 2) / 2, " ",
+		len, txt,
+		(NOTIFY_WIDTH - len - 1) / 2, " ",
+		NOTIFY_BORDER);
+	sfree(txt);
+    } else {
+	char buf[NOTIFY_WIDTH];
+        memset(buf, NOTIFY_BORDER, sizeof(buf));
+	fprintf(stderr, "%-.*s\n", sizeof(buf), buf);
+    }
+}
+
+char* get_command_name(char** argv)
+{
+    char* b = argv[0];
+    char* s = b;
+    char* x = 0;
+    int i;
+
+    for (;;) {
+        switch (*s++) {
+          case '\0':
+    	    break;
+          case '/':
+          case '\\':
+    	    b = *s ? s : argv[0];
+	    x = 0;
+    	    continue;
+          case '.':
+    	    x = s;
+    	    continue;
+	  default:
+	    continue;
+        }
+        break;
+    }
+    i = (x && stricmp(x, "exe") == 0) ? (int)(x - b - 1) : 0;
+    x = dupstr(b);
+    if (i)
+	x[i] = 0;
+#if defined PUTTY_INSTALLDIR_ONLY
+    {
+	/*
+	 * PUTTY_INSTALLDIR_ONLY is of the form \some\path\
+	 * the executable path must match *\some\path\executable-base-name
+	 * if not then an unsupported warning is printed
+	 */
+        HMODULE hp = GetModuleHandle(NULL);
+	char* dir = STR(PUTTY_INSTALLDIR_ONLY);
+	int len = (int)strlen(dir);
+	char* base;
+	char* s;
+        char path[MAX_PATH];
+        GetModuleFileName(hp, path, sizeof(path));
+	base = strrchr(path, '\\') + 1;
+	for (s = path; s = strchr(s, '\\'); ++s) {
+	    if (!strnicmp(s, dir, len) && (s + len) == base) {
+		break;
+	    }
+	}
+	if (!s) {
+	    if (dir[0] == '\\')
+		++dir;
+	    s = strchr(dir, '\\');
+	    len = s ? (int)(s - dir) : (int)strlen(dir);
+	    notifyf(NULL);
+	    notifyf("This %s executable is a %-.*s implementation detail.", x, len, dir);
+	    notifyf("It may change or disappear completely in the next Cloud SDK release.");
+	    notifyf("http://www.putty.org provides a complete ssh client package.");
+	    notifyf(NULL);
+        }
+    }
+#endif
+    return x;
 }
 
 #ifndef NO_SECUREZEROMEMORY
@@ -139,11 +255,48 @@ char *get_username(void)
     return got_username ? user : NULL;
 }
 
+#include <lm.h>
+
+static int newver_module_status = MODULE_STATUS_required;
+
+DECL_WINDOWS_FUNCTION(static, NET_API_STATUS, NetWkstaGetInfo,
+                      (LPWSTR, DWORD, LPBYTE*));
+
+static int oldver_module_status = MODULE_STATUS_required;
+
+DECL_WINDOWS_FUNCTION(static, BOOL, GetVersionExA,
+                      (LPOSVERSIONINFO));
+
 BOOL init_winver(void)
 {
     ZeroMemory(&osVersion, sizeof(osVersion));
-    osVersion.dwOSVersionInfoSize = sizeof (OSVERSIONINFO);
-    return GetVersionEx ( (OSVERSIONINFO *) &osVersion);
+    osVersion.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+    if (newver_module_status == MODULE_STATUS_required) {
+	HMODULE newver_module;
+        newver_module = load_system32_dll("netapi32.dll");
+        GET_WINDOWS_FUNCTION(newver_module, NetWkstaGetInfo);
+	newver_module_status = p_NetWkstaGetInfo ?
+	        MODULE_STATUS_success : MODULE_STATUS_error;
+    }
+    if (newver_module_status == MODULE_STATUS_success) {
+        LPWKSTA_INFO_102 pInfo = NULL;
+        if (p_NetWkstaGetInfo(NULL, 102, (LPBYTE*)&pInfo) == NERR_Success) {
+            osVersion.dwMajorVersion = pInfo->wki102_ver_major;
+            osVersion.dwMinorVersion = pInfo->wki102_ver_minor;
+	    return TRUE;
+        }
+        newver_module_status = MODULE_STATUS_error;
+    }
+    if (oldver_module_status == MODULE_STATUS_required) {
+	HMODULE oldver_module;
+        oldver_module = load_system32_dll("kernel32.dll");
+        GET_WINDOWS_FUNCTION(oldver_module, GetVersionExA);
+	oldver_module_status = p_GetVersionExA ?
+	        MODULE_STATUS_success : MODULE_STATUS_error;
+    }
+    if (oldver_module_status == MODULE_STATUS_success)
+	return p_GetVersionExA(&osVersion);
+    return FALSE;
 }
 
 HMODULE load_system32_dll(const char *libname)
@@ -218,7 +371,7 @@ const char *win_strerror(int error)
                             FORMAT_MESSAGE_IGNORE_INSERTS), NULL, error,
                            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                            msgtext, lenof(msgtext)-1, NULL)) {
-            sprintf(msgtext,
+            szprintf(msgtext, sizeof(msgtext),
                     "(unable to format: FormatMessage returned %d)", 
                     error, GetLastError());
         } else {
@@ -481,6 +634,94 @@ void *minefield_c_realloc(void *p, size_t size)
 
 #endif				/* MINEFIELD */
 
+#include <aclapi.h>
+#include <sddl.h>
+
+static int winsec_module_status = MODULE_STATUS_required;
+
+DECL_WINDOWS_FUNCTION(static, BOOL, ConvertStringSidToSidA,
+                      (LPCTSTR, PSID*));
+DECL_WINDOWS_FUNCTION(static, DWORD, SetEntriesInAclA,
+                      (ULONG, PEXPLICIT_ACCESS, PACL, PACL*));
+DECL_WINDOWS_FUNCTION(static, BOOL, InitializeSecurityDescriptor,
+                      (PSECURITY_DESCRIPTOR, DWORD));
+DECL_WINDOWS_FUNCTION(static, BOOL, SetSecurityDescriptorDacl,
+                      (PSECURITY_DESCRIPTOR, BOOL, PACL, BOOL));
+DECL_WINDOWS_FUNCTION(static, BOOL, SetNamedSecurityInfoA,
+                      (LPTSTR, SE_OBJECT_TYPE, SECURITY_INFORMATION, PSID, PSID, PACL, PACL));
+
+static void filename_create_private(const Filename *filename)
+{
+    char* username;
+
+    if (winsec_module_status == MODULE_STATUS_required) {
+	HMODULE winsec_module;
+        winsec_module = load_system32_dll("advapi32.dll");
+        GET_WINDOWS_FUNCTION(winsec_module, ConvertStringSidToSidA);
+        GET_WINDOWS_FUNCTION(winsec_module, SetEntriesInAclA);
+        GET_WINDOWS_FUNCTION(winsec_module, InitializeSecurityDescriptor);
+        GET_WINDOWS_FUNCTION(winsec_module, SetSecurityDescriptorDacl);
+        GET_WINDOWS_FUNCTION(winsec_module, SetNamedSecurityInfoA);
+	winsec_module_status = p_ConvertStringSidToSidA &&
+	    p_SetEntriesInAclA && p_InitializeSecurityDescriptor &&
+	    p_SetSecurityDescriptorDacl && p_SetNamedSecurityInfoA ?
+	        MODULE_STATUS_success : MODULE_STATUS_error;
+    }
+    if (winsec_module_status != MODULE_STATUS_success)
+	return;
+    username = get_username();
+    if (username != NULL) {
+	SECURITY_DESCRIPTOR sd;
+        EXPLICIT_ACCESS ea;
+        PSID sid = NULL;
+        PACL acl = NULL;
+
+        ea.grfAccessMode = GRANT_ACCESS;
+        ea.grfAccessPermissions = GENERIC_READ|GENERIC_WRITE;
+        ea.grfInheritance = OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE;
+        ea.Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
+        ea.Trustee.pMultipleTrustee = NULL;
+        ea.Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
+
+        if (p_ConvertStringSidToSidA(username, &sid)) {
+            ea.Trustee.ptstrName = sid;
+            ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+        } else {
+            ea.Trustee.ptstrName = username;
+            ea.Trustee.TrusteeForm = TRUSTEE_IS_NAME;
+        }
+        if (p_SetEntriesInAclA(1, &ea, NULL, &acl) == ERROR_SUCCESS &&
+	    p_InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION) &&
+	    p_SetSecurityDescriptorDacl(&sd, TRUE, acl, FALSE)) {
+	    SECURITY_ATTRIBUTES sa;
+	    HANDLE fh;
+	    sa.nLength = sizeof(sa);
+	    sa.lpSecurityDescriptor = &sd;
+	    sa.bInheritHandle = FALSE;
+	    fh = CreateFile(filename->path, GENERIC_READ|GENERIC_WRITE, 0,
+			    &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	    if (fh != INVALID_HANDLE_VALUE) {
+		CloseHandle(fh);
+                p_SetNamedSecurityInfoA(filename->path, SE_FILE_OBJECT,
+			               DACL_SECURITY_INFORMATION,
+			               NULL, NULL, acl, NULL);
+	    }
+	}
+        sfree(username);
+        if (sid != NULL)
+	    LocalFree(sid);
+        if (acl != NULL)
+	    LocalFree(acl);
+    }
+}
+
+FILE *f_open(const Filename *filename, char const *mode, int is_private)
+{
+    if (is_private)
+	filename_create_private(filename);
+    return fopen(filename->path, mode);
+}
+
 FontSpec *fontspec_new(const char *name,
                         int bold, int height, int charset)
 {
@@ -522,7 +763,7 @@ FontSpec *fontspec_deserialise(void *vdata, int maxsize, int *used)
     if (!end)
         return NULL;
     end++;
-    *used = end - data + 12;
+    *used = (int)(end - data + 12);
     return fontspec_new(data,
                         GET_32BIT_MSB_FIRST(end),
                         GET_32BIT_MSB_FIRST(end + 4),

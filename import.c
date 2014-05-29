@@ -189,7 +189,7 @@ static int ber_read_id_len(void *source, int sourcelen,
 	p++, sourcelen--;
     }
 
-    return p - (unsigned char *) source;
+    return (int)(p - (unsigned char *) source);
 }
 
 /*
@@ -627,7 +627,7 @@ struct ssh2_userkey *openssh_read(const Filename *filename, char *passphrase,
     privptr = -1;
 
     for (i = 0; i < num_integers; i++) {
-	ret = ber_read_id_len(p, key->keyblob+key->keyblob_len-p,
+	ret = (int)ber_read_id_len(p, (int)(key->keyblob+key->keyblob_len-p),
 			      &id, &len, &flags);
 	p += ret;
 	if (ret < 0 || id != 2 ||
@@ -1106,7 +1106,7 @@ static struct sshcom_key *load_sshcom_key(const Filename *filename,
 	    }
 	    *p++ = '\0';
 	    while (*p && isspace((unsigned char)*p)) p++;
-	    hdrstart = p - line;
+	    hdrstart = (int)(p - line);
 
             /*
              * Header lines can end in a trailing backslash for
@@ -1269,7 +1269,7 @@ static int sshcom_read_mpint(void *data, int len, struct mpint_pos *ret)
     bits = GET_32BIT(d);
 
     bytes = (bits + 7) / 8;
-    if (len < 4+bytes)
+    if (len < (int)(4+bytes))
         goto error;
 
     ret->start = d + 4;
@@ -1718,22 +1718,22 @@ int sshcom_write(const Filename *filename, struct ssh2_userkey *key,
     if (!fp)
 	goto error;
     fputs("---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----\n", fp);
-    fprintf(fp, "Comment: \"");
-    /*
-     * Comment header is broken with backslash-newline if it goes
-     * over 70 chars. Although it's surrounded by quotes, it
-     * _doesn't_ escape backslashes or quotes within the string.
-     * Don't ask me, I didn't design it.
-     */
-    {
-	int slen = 60;		       /* starts at 60 due to "Comment: " */
-	char *c = key->comment;
-	while ((int)strlen(c) > slen) {
-	    fprintf(fp, "%.*s\\\n", slen, c);
-	    c += slen;
-	    slen = 70;		       /* allow 70 chars on subsequent lines */
-	}
-	fprintf(fp, "%s\"\n", c);
+    if (key->comment && *key->comment) {
+        /*
+         * Comment header is broken with backslash-newline if it goes
+         * over 70 chars. Although it's surrounded by quotes, it
+         * _doesn't_ escape backslashes or quotes within the string.
+         * Don't ask me, I didn't design it.
+         */
+    	int slen = 60;		       /* starts at 60 due to "Comment: " */
+    	char *c = key->comment;
+        fprintf(fp, "Comment: \"");
+    	while ((int)strlen(c) > slen) {
+    	    fprintf(fp, "%.*s\\\n", slen, c);
+    	    c += slen;
+    	    slen = 70;		       /* allow 70 chars on subsequent lines */
+    	}
+    	fprintf(fp, "%s\"\n", c);
     }
     base64_encode(fp, outblob, pos, 70);
     fputs("---- END SSH2 ENCRYPTED PRIVATE KEY ----\n", fp);

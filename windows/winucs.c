@@ -1034,7 +1034,7 @@ int decode_codepage(char *cp_name)
                 if (codepage == -1)
                     return codepage;
                 if (codepage == 0) {
-                    codepage = 65536 + (cpi - cp_list);
+                    codepage = 65536 + (int)(cpi - cp_list);
                     goto break_break;
                 }
 
@@ -1085,12 +1085,12 @@ const char *cp_name(int codepage)
     static char buf[32];
 
     if (codepage == -1) {
-	sprintf(buf, "Use font encoding");
+	szprintf(buf, sizeof(buf), "Use font encoding");
 	return buf;
     }
 
     if (codepage > 0 && codepage < 65536)
-	sprintf(buf, "CP%03d", codepage);
+	szprintf(buf, sizeof(buf), "CP%03d", codepage);
     else
 	*buf = 0;
 
@@ -1196,7 +1196,7 @@ int wc_to_mb(int codepage, int flags, const wchar_t *wcstr, int wclen,
 #endif
 	    assert(p - mbstr < mblen);
 	}
-	return p - mbstr;
+	return (int)(p - mbstr);
     } else
 	return WideCharToMultiByte(codepage, flags, wcstr, wclen,
 				   mbstr, mblen, defchr, defused);

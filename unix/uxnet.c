@@ -1461,7 +1461,7 @@ char *get_hostname(void)
 SockAddr platform_get_x11_unix_address(const char *sockpath, int displaynum)
 {
     SockAddr ret = snew(struct SockAddr_tag);
-    int n;
+    size_t n;
 
     memset(ret, 0, sizeof *ret);
     ret->superfamily = UNIX;
@@ -1470,16 +1470,14 @@ SockAddr platform_get_x11_unix_address(const char *sockpath, int displaynum)
      * have been passed an explicit Unix socket path.
      */
     if (sockpath) {
-	n = snprintf(ret->hostname, sizeof ret->hostname,
+	n = szprintf(ret->hostname, sizeof ret->hostname,
 		     "%s", sockpath);
     } else {
-	n = snprintf(ret->hostname, sizeof ret->hostname,
+	n = szprintf(ret->hostname, sizeof ret->hostname,
 		     "%s%d", X11_UNIX_PATH, displaynum);
     }
 
-    if (n < 0)
-	ret->error = "snprintf failed";
-    else if (n >= sizeof ret->hostname)
+    if (n >= (sizeof ret->hostname - 1))
 	ret->error = "X11 UNIX name too long";
 
 #ifndef NO_IPV6
@@ -1495,15 +1493,13 @@ SockAddr platform_get_x11_unix_address(const char *sockpath, int displaynum)
 SockAddr unix_sock_addr(const char *path)
 {
     SockAddr ret = snew(struct SockAddr_tag);
-    int n;
+    size_t n;
 
     memset(ret, 0, sizeof *ret);
     ret->superfamily = UNIX;
-    n = snprintf(ret->hostname, sizeof ret->hostname, "%s", path);
+    n = szprintf(ret->hostname, sizeof ret->hostname, "%s", path);
 
-    if (n < 0)
-	ret->error = "snprintf failed";
-    else if (n >= sizeof ret->hostname)
+    if (n >= (sizeof ret->hostname - 1))
 	ret->error = "socket pathname too long";
 
 #ifndef NO_IPV6

@@ -558,16 +558,17 @@ int proxy_http_negotiate (Proxy_Socket p, int change)
 	password = conf_get_str(p->conf, CONF_proxy_password);
 	if (username[0] || password[0]) {
 	    char *buf, *buf2;
-	    int i, j, len;
+	    size_t i, len, pos, siz;
 	    buf = dupprintf("%s:%s", username, password);
-	    len = strlen(buf);
-	    buf2 = snewn(len * 4 / 3 + 100, char);
-	    sprintf(buf2, "Proxy-Authorization: Basic ");
-	    for (i = 0, j = strlen(buf2); i < len; i += 3, j += 4)
+	    siz = strlen(buf);
+	    len = siz * 4 / 3 + 100;
+	    buf2 = snewn(len, char);
+	    pos = szprintf(buf2, len, "Proxy-Authorization: Basic ");
+	    for (i = 0; i < siz; i += 3, pos += 4)
 		base64_encode_atom((unsigned char *)(buf+i),
-				   (len-i > 3 ? 3 : len-i), buf2+j);
-	    strcpy(buf2+j, "\r\n");
-	    sk_write(p->sub_socket, buf2, strlen(buf2));
+				   (siz-i > 3 ? 3 : (int)(siz-i)), buf2+pos);
+	    pos += szprintf(buf2 + pos, len - pos, "\r\n");
+	    sk_write(p->sub_socket, buf2, (int)pos);
 	    sfree(buf);
 	    sfree(buf2);
 	}
@@ -1128,22 +1129,38 @@ int proxy_socks5_negotiate (Proxy_Socket p, int change)
 
 	    if (data[1] != 0) {
 		char buf[256];
+		size_t pos;
 
-		strcpy(buf, "Proxy error: ");
+		pos = szprintf(buf, sizeof(buf), "Proxy error: ");
 
 		switch (data[1]) {
-		  case 1: strcat(buf, "General SOCKS server failure"); break;
-		  case 2: strcat(buf, "Connection not allowed by ruleset"); break;
-		  case 3: strcat(buf, "Network unreachable"); break;
-		  case 4: strcat(buf, "Host unreachable"); break;
-		  case 5: strcat(buf, "Connection refused"); break;
-		  case 6: strcat(buf, "TTL expired"); break;
-		  case 7: strcat(buf, "Command not supported"); break;
-		  case 8: strcat(buf, "Address type not supported"); break;
-		  default: sprintf(buf+strlen(buf),
-				   "Unrecognised SOCKS error code %d",
-				   data[1]);
-		    break;
+		  case 1:  szprintf(buf + pos, sizeof(buf) - pos,
+				    "General SOCKS server failure");
+			   break;
+		  case 2:  szprintf(buf + pos, sizeof(buf) - pos, 
+				    "Connection not allowed by ruleset");
+			   break;
+		  case 3:  szprintf(buf + pos, sizeof(buf) - pos,
+				    "Network unreachable");
+			   break;
+		  case 4:  szprintf(buf + pos, sizeof(buf) - pos,
+				    "Host unreachable");
+			   break;
+		  case 5:  szprintf(buf + pos, sizeof(buf) - pos,
+				    "Connection refused");
+			   break;
+		  case 6:  szprintf(buf + pos, sizeof(buf) - pos,
+				    "TTL expired");
+			   break;
+		  case 7:  szprintf(buf + pos, sizeof(buf) - pos,
+				    "Command not supported");
+			   break;
+		  case 8:  szprintf(buf + pos, sizeof(buf) - pos,
+				    "Address type not supported");
+			   break;
+		  default: szprintf(buf + pos, sizeof(buf) - pos,
+				   "Unrecognised SOCKS error code %d", data[1]);
+		           break;
 		}
 		plug_closing(p->plug, buf, PROXY_ERROR_GENERAL, 0);
 
@@ -1231,7 +1248,7 @@ char *format_telnet_command(SockAddr addr, int port, Conf *conf)
 {
     char *fmt = conf_get_str(conf, CONF_proxy_telnet_command);
     char *ret = NULL;
-    int retlen = 0, retsize = 0;
+    size_t retlen = 0, retsize = 0;
     int so = 0, eo = 0;
 #define ENSURE(n) do { \
     if (retsize < retlen + n) { \
@@ -1375,8 +1392,9 @@ char *format_telnet_command(SockAddr addr, int port, Conf *conf)
 		eo += 4;
 	    }
 	    else if (strnicmp(fmt + eo, "port", 4) == 0) {
-		char portstr[8], portlen;
-		portlen = sprintf(portstr, "%i", port);
+		char portstr[8];
+                size_t portlen;
+		portlen = szprintf(portstr, sizeof(portstr), "%i", port);
 		ENSURE(portlen);
 		memcpy(ret + retlen, portstr, portlen);
 		retlen += portlen;
@@ -1409,9 +1427,8 @@ char *format_telnet_command(SockAddr addr, int port, Conf *conf)
 	    else if (strnicmp(fmt + eo, "proxyport", 9) == 0) {
 		int port = conf_get_int(conf, CONF_proxy_port);
                 char pport[50];
-		int pplen;
-                sprintf(pport, "%d", port);
-                pplen = strlen(pport);
+		size_t pplen;
+                pplen = szprintf(pport, sizeof(pport), "%d", port);
 		ENSURE(pplen);
 		memcpy(ret+retlen, pport, pplen);
 		retlen += pplen;

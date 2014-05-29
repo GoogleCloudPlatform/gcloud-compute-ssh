@@ -36,6 +36,11 @@ typedef struct terminal_tag Terminal;
 #define PGP_DSA_MASTER_KEY_FP \
     "313C 3E76 4B74 C2C5 F2AE  83A8 4F5E 6DF5 6A93 B34E"
 
+/*
+ * PuTTY private key file suffix
+ */
+#define PRIVATE_KEY_SUFFIX	"ppk"
+
 /* Three attribute types: 
  * The ATTRs (normal attributes) are stored with the characters in
  * the main display arrays
@@ -421,7 +426,7 @@ struct backend_tag {
     /* back->reconfig() passes in a replacement configuration. */
     void (*reconfig) (void *handle, Conf *conf);
     /* back->send() returns the current amount of buffered data. */
-    int (*send) (void *handle, char *buf, int len);
+    int (*send) (void *handle, char *buf, size_t len);
     /* back->sendbuffer() does the same thing but without attempting a send */
     int (*sendbuffer) (void *handle);
     void (*size) (void *handle, int width, int height);
@@ -607,8 +612,8 @@ void ldisc_update(void *frontend, int echo, int edit);
  * special commands changes. It does not need to invoke it at session
  * shutdown. */
 void update_specials_menu(void *frontend);
-int from_backend(void *frontend, int is_stderr, const char *data, int len);
-int from_backend_untrusted(void *frontend, const char *data, int len);
+int from_backend(void *frontend, int is_stderr, const char *data, size_t len);
+int from_backend_untrusted(void *frontend, const char *data, size_t len);
 /* Called when the back end wants to indicate that EOF has arrived on
  * the server-to-client stream. Returns FALSE to indicate that we
  * intend to keep the session open in the other direction, or TRUE to
@@ -702,6 +707,8 @@ void cleanup_exit(int);
     X(INT, NONE, ssh_no_shell) /* avoid running a shell */ \
     X(STR, NONE, ssh_nc_host) /* host to connect to in `nc' mode */ \
     X(INT, NONE, ssh_nc_port) /* port to connect to in `nc' mode */ \
+    X(INT, NONE, ssh_check_host_ip) /* -o CheckHostIP=no */ \
+    X(INT, NONE, ssh_strict_host_key_checking) /* -o StrictHostKeyChecking=no */ \
     /* Telnet options */ \
     X(STR, NONE, termtype) \
     X(STR, NONE, termspeed) \
@@ -924,6 +931,14 @@ void noise_regular(void);
 void noise_ultralight(unsigned long data);
 void random_save_seed(void);
 void random_destroy_seed(void);
+/*
+ * Non-interactive non-GUI cryptographic random data generator.
+ * If len==0: returns 1 if cryptographic random data supported, 0 otherwise.
+ * If len>0: returns 1 if len bytes of cryptographic random data copied
+ * to buf, 2 if len bytes of system entropic data copied to buf (not as
+ * good as 1), 0 otherwise.
+ */
+int noise_crypto(char *buf, int len);
 
 /*
  * Exports from settings.c.
@@ -985,8 +1000,8 @@ int term_ldisc(Terminal *, int option);
 void term_copyall(Terminal *);
 void term_reconfig(Terminal *, Conf *);
 void term_seen_key_event(Terminal *); 
-int term_data(Terminal *, int is_stderr, const char *data, int len);
-int term_data_untrusted(Terminal *, const char *data, int len);
+int term_data(Terminal *, int is_stderr, const char *data, size_t len);
+int term_data_untrusted(Terminal *, const char *data, size_t len);
 void term_provide_resize_fn(Terminal *term,
 			    void (*resize_fn)(void *, int, int),
 			    void *resize_ctx);
@@ -996,7 +1011,7 @@ char *term_get_ttymode(Terminal *term, const char *mode);
 int term_get_userpass_input(Terminal *term, prompts_t *p,
 			    unsigned char *in, int inlen);
 
-int format_arrow_key(char *buf, Terminal *term, int xkey, int ctrl);
+int format_arrow_key(char *buf, int len, Terminal *term, int xkey, int ctrl);
 
 /*
  * Exports from logging.c.
@@ -1058,7 +1073,7 @@ extern Backend ssh_backend;
 void *ldisc_create(Conf *, Terminal *, Backend *, void *, void *);
 void ldisc_configure(void *, Conf *);
 void ldisc_free(void *);
-void ldisc_send(void *handle, char *buf, int len, int interactive);
+void ldisc_send(void *handle, char *buf, size_t len, int interactive);
 
 /*
  * Exports from ldiscucs.c.
@@ -1201,6 +1216,14 @@ int askalg(void *frontend, const char *algtype, const char *algname,
  */
 int askappend(void *frontend, Filename *filename,
 	      void (*callback)(void *ctx, int result), void *ctx);
+/*
+ * askoverwrite can return two values:
+ * 
+ *  - 1 means overwrite the file
+ *  - 0 means do not overwrite the file
+ */
+int askoverwrite(void *frontend, const Filename *filename,
+	      void (*callback)(void *ctx, int result), void *ctx);
 
 /*
  * Exports from console frontends (wincons.c, uxcons.c)
@@ -1293,8 +1316,10 @@ Filename *filename_copy(const Filename *fn);
 void filename_free(Filename *fn);
 int filename_serialise(const Filename *f, void *data);
 Filename *filename_deserialise(void *data, int maxsize, int *used);
+int filename_has_suffix(const Filename *f, const char *suffix);
 char *get_username(void);	       /* return value needs freeing */
 char *get_random_data(int bytes);      /* used in cmdgen.c */
+char *get_command_name(char** argv);
 
 /*
  * Exports and imports from timing.c.

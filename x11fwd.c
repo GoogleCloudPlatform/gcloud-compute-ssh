@@ -73,6 +73,7 @@ static const struct plug_function_table dummy_plug = {
 struct X11FakeAuth *x11_invent_fake_auth(tree234 *authtree, int authtype)
 {
     struct X11FakeAuth *auth = snew(struct X11FakeAuth);
+    size_t len, pos;
     int i;
 
     /*
@@ -138,9 +139,10 @@ struct X11FakeAuth *x11_invent_fake_auth(tree234 *authtree, int authtype)
         auth->xdmseen = newtree234(xdmseen_cmp);
     }
     auth->protoname = dupstr(x11_authnames[auth->proto]);
-    auth->datastring = snewn(auth->datalen * 2 + 1, char);
-    for (i = 0; i < auth->datalen; i++)
-	sprintf(auth->datastring + i*2, "%02x",
+    len = auth->datalen * 2 + 1;
+    auth->datastring = snewn(len, char);
+    for (i = 0, pos = 0; i < auth->datalen; i++)
+	pos += szprintf(auth->datastring + pos, len - pos, "%02x",
 		auth->data[i]);
 
     auth->disp = NULL;
@@ -420,7 +422,7 @@ static char *x11_verify(unsigned long peer_ip, int peer_port,
 	    if (data[i] != 0)	       /* zero padding wrong */
 		return "XDM-AUTHORIZATION-1 data failed check";
 	tim = time(NULL);
-	if (abs(t - tim) > XDM_MAXSKEW)
+	if (abs((int)(t - tim)) > XDM_MAXSKEW)
 	    return "XDM-AUTHORIZATION-1 time stamp was too far out";
 	seen = snew(struct XDMSeen);
 	seen->time = t;
@@ -677,7 +679,7 @@ int x11_get_screen_number(char *display)
 {
     int n;
 
-    n = host_strcspn(display, ":");
+    n = (int)host_strcspn(display, ":");
     if (!display[n])
 	return 0;
     n = strcspn(display, ".");
@@ -933,13 +935,14 @@ int x11_send(struct X11Connection *xconn, char *data, int len)
          * auth data.
 	 */
 
+	socketdatalen = 0; /* supress unused var warning */
         socketdata = sk_getxdmdata(xconn->s, &socketdatalen);
         if (socketdata && socketdatalen==6) {
-            sprintf(new_peer_addr, "%d.%d.%d.%d", socketdata[0],
-                    socketdata[1], socketdata[2], socketdata[3]);
+            szprintf(new_peer_addr, sizeof(new_peer_addr), "%d.%d.%d.%d",
+		    socketdata[0], socketdata[1], socketdata[2], socketdata[3]);
             new_peer_port = GET_16BIT_MSB_FIRST(socketdata + 4);
         } else {
-            strcpy(new_peer_addr, "0.0.0.0");
+            szprintf(new_peer_addr, sizeof(new_peer_addr), "0.0.0.0");
             new_peer_port = 0;
         }
 

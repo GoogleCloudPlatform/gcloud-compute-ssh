@@ -18,7 +18,7 @@
 struct Filename {
     char *path;
 };
-#define f_open(filename, mode, isprivate) ( fopen((filename)->path, (mode)) )
+FILE *f_open(const struct Filename *, char const *, int);
 
 struct FontSpec {
     char *name;
@@ -233,7 +233,7 @@ GLOBAL void *logctx;
  * these strings are of exactly the type needed to go in
  * `lpstrFilter' in an OPENFILENAME structure.
  */
-#define FILTER_KEY_FILES ("PuTTY Private Key Files (*.ppk)\0*.ppk\0" \
+#define FILTER_KEY_FILES ("PuTTY Private Key Files (*." PRIVATE_KEY_SUFFIX ")\0*." PRIVATE_KEY_SUFFIX "\0" \
 			      "All Files (*.*)\0*\0\0\0")
 #define FILTER_WAVE_FILES ("Wave Files (*.wav)\0*.WAV\0" \
 			       "All Files (*.*)\0*\0\0\0")

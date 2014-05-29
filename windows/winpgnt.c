@@ -178,8 +178,8 @@ static void forget_passphrases(void)
 /*
  * Dialog-box function for the Licence box.
  */
-static int CALLBACK LicenceProc(HWND hwnd, UINT msg,
-				WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK LicenceProc(HWND hwnd, UINT msg,
+				    WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
       case WM_INITDIALOG:
@@ -202,8 +202,8 @@ static int CALLBACK LicenceProc(HWND hwnd, UINT msg,
 /*
  * Dialog-box function for the About box.
  */
-static int CALLBACK AboutProc(HWND hwnd, UINT msg,
-			      WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK AboutProc(HWND hwnd, UINT msg,
+			          WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
       case WM_INITDIALOG:
@@ -237,7 +237,7 @@ static HWND passphrase_box;
 /*
  * Dialog-box function for the passphrase box.
  */
-static int CALLBACK PassphraseProc(HWND hwnd, UINT msg,
+static INT_PTR CALLBACK PassphraseProc(HWND hwnd, UINT msg,
 				   WPARAM wParam, LPARAM lParam)
 {
     static char **passphrase = NULL;
@@ -337,7 +337,7 @@ static void keylist_update(void)
 	     */
 	    strcpy(listentry, "ssh1\t");
 	    p = listentry + strlen(listentry);
-	    rsa_fingerprint(p, sizeof(listentry) - (p - listentry), rkey);
+	    rsa_fingerprint(p, (int)(sizeof(listentry) - (p - listentry)), rkey);
 	    p = strchr(listentry, ' ');
 	    if (p)
 		*p = '\t';
@@ -531,7 +531,7 @@ static void add_keyfile(Filename *filename)
 	    if(pp) {
 		passphrase = dupstr(pp);
 	    } else {
-		int dlgret;
+		INT_PTR dlgret;
                 struct PassphraseProcStruct pps;
 
                 pps.passphrase = &passphrase;
@@ -936,17 +936,17 @@ static void answer_msg(void *msg)
 	    int i, len;
 
 	    p += 4;
-	    i = ssh1_read_bignum(p, msgend - p, &reqkey.exponent);
+	    i = ssh1_read_bignum(p, (int)(msgend - p), &reqkey.exponent);
 	    if (i < 0)
 		goto failure;
 	    p += i;
-	    i = ssh1_read_bignum(p, msgend - p, &reqkey.modulus);
+	    i = ssh1_read_bignum(p, (int)(msgend - p), &reqkey.modulus);
 	    if (i < 0) {
                 freebn(reqkey.exponent);
 		goto failure;
             }
 	    p += i;
-	    i = ssh1_read_bignum(p, msgend - p, &challenge);
+	    i = ssh1_read_bignum(p, (int)(msgend - p), &challenge);
 	    if (i < 0) {
                 freebn(reqkey.exponent);
                 freebn(reqkey.modulus);
@@ -1044,7 +1044,7 @@ static void answer_msg(void *msg)
 	    key = snew(struct RSAKey);
 	    memset(key, 0, sizeof(struct RSAKey));
 
-	    n = makekey(p, msgend - p, key, NULL, 1);
+	    n = makekey(p, (int)(msgend - p), key, NULL, 1);
 	    if (n < 0) {
 		freersakey(key);
 		sfree(key);
@@ -1052,7 +1052,7 @@ static void answer_msg(void *msg)
 	    }
 	    p += n;
 
-	    n = makeprivate(p, msgend - p, key);
+	    n = makeprivate(p, (int)(msgend - p), key);
 	    if (n < 0) {
 		freersakey(key);
 		sfree(key);
@@ -1060,7 +1060,7 @@ static void answer_msg(void *msg)
 	    }
 	    p += n;
 
-	    n = ssh1_read_bignum(p, msgend - p, &key->iqmp);  /* p^-1 mod q */
+	    n = ssh1_read_bignum(p, (int)(msgend - p), &key->iqmp);  /* p^-1 mod q */
 	    if (n < 0) {
 		freersakey(key);
 		sfree(key);
@@ -1068,7 +1068,7 @@ static void answer_msg(void *msg)
 	    }
 	    p += n;
 
-	    n = ssh1_read_bignum(p, msgend - p, &key->p);  /* p */
+	    n = ssh1_read_bignum(p, (int)(msgend - p), &key->p);  /* p */
 	    if (n < 0) {
 		freersakey(key);
 		sfree(key);
@@ -1076,7 +1076,7 @@ static void answer_msg(void *msg)
 	    }
 	    p += n;
 
-	    n = ssh1_read_bignum(p, msgend - p, &key->q);  /* q */
+	    n = ssh1_read_bignum(p, (int)(msgend - p), &key->q);  /* q */
 	    if (n < 0) {
 		freersakey(key);
 		sfree(key);
@@ -1146,7 +1146,7 @@ static void answer_msg(void *msg)
 		goto failure;
 	    }
 
-	    bloblen = msgend - p;
+	    bloblen = (int)(msgend - p);
 	    key->data = key->alg->openssh_createkey(&p, &bloblen);
 	    if (!key->data) {
 		sfree(key);
@@ -1201,7 +1201,7 @@ static void answer_msg(void *msg)
 	    struct RSAKey reqkey, *key;
 	    int n;
 
-	    n = makekey(p, msgend - p, &reqkey, NULL, 0);
+	    n = makekey(p, (int)(msgend - p), &reqkey, NULL, 0);
 	    if (n < 0)
 		goto failure;
 
@@ -1473,8 +1473,8 @@ static void prompt_add_keyfile(void)
 /*
  * Dialog-box function for the key list box.
  */
-static int CALLBACK KeyListProc(HWND hwnd, UINT msg,
-				WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK KeyListProc(HWND hwnd, UINT msg,
+				    WPARAM wParam, LPARAM lParam)
 {
     struct RSAKey *rkey;
     struct ssh2_userkey *skey;
@@ -1545,7 +1545,7 @@ static int CALLBACK KeyListProc(HWND hwnd, UINT msg,
 		
 		/* get the number of items selected in the list */
 		int numSelected = 
-			SendDlgItemMessage(hwnd, 100, LB_GETSELCOUNT, 0, 0);
+		    (int)SendDlgItemMessage(hwnd, 100, LB_GETSELCOUNT, 0, 0);
 		
 		/* none selected? that was silly */
 		if (numSelected == 0) {
@@ -1792,9 +1792,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 	    update_sessions();
 	    SetForegroundWindow(hwnd);
 	    ret = TrackPopupMenu(systray_menu,
-				 TPM_RIGHTALIGN | TPM_BOTTOMALIGN |
-				 TPM_RIGHTBUTTON,
-				 wParam, lParam, 0, hwnd, NULL);
+				  TPM_RIGHTALIGN | TPM_BOTTOMALIGN |
+				  TPM_RIGHTBUTTON,
+				  (int)wParam, (int)lParam, 0, hwnd, NULL);
 	    menuinprogress = 0;
 	}
 	break;
@@ -1866,9 +1866,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message,
 		    mii.fMask = MIIM_TYPE;
 		    mii.cch = MAX_PATH;
 		    mii.dwTypeData = buf;
-		    GetMenuItemInfo(session_menu, wParam, FALSE, &mii);
-		    strcpy(param, "@");
-		    strcat(param, mii.dwTypeData);
+		    GetMenuItemInfo(session_menu, (UINT)wParam, FALSE, &mii);
+		    szprintf(param, sizeof(param), "@%s", mii.dwTypeData);
 		    if((int)ShellExecute(hwnd, NULL, putty_path, param,
 					 _T(""), SW_SHOW) <= 32) {
 			MessageBox(NULL, "Unable to execute PuTTY!", "Error",
@@ -2255,6 +2254,6 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
 
     if (keypath) filereq_free(keypath);
 
-    cleanup_exit(msg.wParam);
-    return msg.wParam;		       /* just in case optimiser complains */
+    cleanup_exit((int)msg.wParam);
+    return (int)msg.wParam;		       /* just in case optimiser complains */
 }

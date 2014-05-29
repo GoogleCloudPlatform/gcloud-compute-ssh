@@ -21,7 +21,7 @@
                       (ldisc->back->ldisc(ldisc->backhandle, LD_EDIT) || \
 			   term_ldisc(ldisc->term, LD_EDIT))))
 
-static void c_write(Ldisc ldisc, char *buf, int len)
+static void c_write(Ldisc ldisc, char *buf, size_t len)
 {
     from_backend(ldisc->frontend, 0, buf, len);
 }
@@ -54,7 +54,7 @@ static void pwrite(Ldisc ldisc, unsigned char c)
 	c_write(ldisc, cc, 2);
     } else {
 	char cc[5];
-	sprintf(cc, "<%02X>", c);
+	szprintf(cc, sizeof(cc), "<%02X>", c);
 	c_write(ldisc, cc, 4);
     }
 }
@@ -127,7 +127,7 @@ void ldisc_free(void *handle)
     sfree(ldisc);
 }
 
-void ldisc_send(void *handle, char *buf, int len, int interactive)
+void ldisc_send(void *handle, char *buf, size_t len, int interactive)
 {
     Ldisc ldisc = (Ldisc) handle;
     int keyflag = 0;

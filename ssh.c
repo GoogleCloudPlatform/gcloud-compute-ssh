@@ -1211,7 +1211,7 @@ static void ssh1_log_outgoing_packet(Ssh ssh, struct Packet *pkt)
      * packet to conform to the incoming-packet semantics, so that we
      * can analyse it with the ssh_pkt_get functions.
      */
-    pkt->length -= (pkt->body - pkt->data);
+    pkt->length -= (long)(pkt->body - pkt->data);
     pkt->savedpos = 0;
 
     if (ssh->logomitdata &&
@@ -1270,7 +1270,7 @@ static void ssh1_log_outgoing_packet(Ssh ssh, struct Packet *pkt)
      * Undo the above adjustment of pkt->length, to put the packet
      * back in the state we found it.
      */
-    pkt->length += (pkt->body - pkt->data);
+    pkt->length += (long)(pkt->body - pkt->data);
 }
 
 /*
@@ -1434,7 +1434,7 @@ static void ssh2_log_outgoing_packet(Ssh ssh, struct Packet *pkt)
      * packet to conform to the incoming-packet semantics, so that we
      * can analyse it with the ssh_pkt_get functions.
      */
-    pkt->length -= (pkt->body - pkt->data);
+    pkt->length -= (long)(pkt->body - pkt->data);
     pkt->savedpos = 0;
 
     if (ssh->logomitdata &&
@@ -1532,7 +1532,7 @@ static void ssh2_log_outgoing_packet(Ssh ssh, struct Packet *pkt)
      * Undo the above adjustment of pkt->length, to put the packet
      * back in the state we found it.
      */
-    pkt->length += (pkt->body - pkt->data);
+    pkt->length += (long)(pkt->body - pkt->data);
 }
 
 static struct Packet *ssh2_rdpkt(Ssh ssh, unsigned char **data, int *datalen)
@@ -2012,7 +2012,7 @@ static void ssh_pkt_ensure(struct Packet *pkt, int length)
 {
     if (pkt->maxlen < length) {
 	unsigned char *body = pkt->body;
-	int offset = body ? body - pkt->data : 0;
+	int offset = body ? (int)(body - pkt->data) : 0;
 	pkt->maxlen = length + 256;
 	pkt->data = sresize(pkt->data, pkt->maxlen + APIEXTRA, unsigned char);
 	if (body) pkt->body = pkt->data + offset;
@@ -3776,14 +3776,14 @@ static int do_ssh1_login(Ssh ssh, unsigned char *in, int inlen,
     /*
      * Verify the host key.
      */
-    {
+    if (conf_get_int(ssh->conf, CONF_ssh_strict_host_key_checking)) {
 	/*
 	 * First format the key into a string.
 	 */
 	int len = rsastr_len(&s->hostkey);
 	char fingerprint[100];
 	char *keystr = snewn(len, char);
-	rsastr_fmt(keystr, &s->hostkey);
+	rsastr_fmt(keystr, len, &s->hostkey);
 	rsa_fingerprint(fingerprint, sizeof(fingerprint), &s->hostkey);
 
         ssh_set_frozen(ssh, 1);
@@ -6676,11 +6676,14 @@ static void do_ssh2_transport(Ssh ssh, void *vin, int inlen,
          */
         s->fingerprint = ssh->hostkey->fingerprint(s->hkey);
         ssh_set_frozen(ssh, 1);
-        s->dlgret = verify_ssh_host_key(ssh->frontend,
-                                        ssh->savedhost, ssh->savedport,
-                                        ssh->hostkey->keytype, s->keystr,
-                                        s->fingerprint,
-                                        ssh_dialog_callback, ssh);
+	if (conf_get_int(ssh->conf, CONF_ssh_strict_host_key_checking))
+            s->dlgret = verify_ssh_host_key(ssh->frontend,
+                                            ssh->savedhost, ssh->savedport,
+                                            ssh->hostkey->keytype, s->keystr,
+                                            s->fingerprint,
+                                            ssh_dialog_callback, ssh);
+	else
+	    s->dlgret = 1;
         if (s->dlgret < 0) {
             do {
                 crReturnV;
@@ -8556,9 +8559,9 @@ static void do_ssh2_authconn(Ssh ssh, unsigned char *in, int inlen,
 	s->keyfile = conf_get_filename(ssh->conf, CONF_keyfile);
 	if (!filename_is_null(s->keyfile)) {
 	    int keytype;
-	    logeventf(ssh, "Reading private key file \"%.150s\"",
-		      filename_to_str(s->keyfile));
 	    keytype = key_type(s->keyfile);
+	    logeventf(ssh, "Reading private key file \"%.150s\" type \"%s\"",
+		      filename_to_str(s->keyfile), key_type_to_str(keytype));
 	    if (keytype == SSH_KEYTYPE_SSH2) {
 		const char *error;
 		s->publickey_blob =
@@ -9321,14 +9324,14 @@ static void do_ssh2_authconn(Ssh ssh, unsigned char *in, int inlen,
 		ssh2_pkt_adduint32(s->pktout,1);
 
 		/* length of OID + 2 */
-		ssh2_pkt_adduint32(s->pktout, s->gss_buf.length + 2);
+		ssh2_pkt_adduint32(s->pktout, (unsigned long)(s->gss_buf.length + 2));
 		ssh2_pkt_addbyte(s->pktout, SSH2_GSS_OIDTYPE);
 
 		/* length of OID */
 		ssh2_pkt_addbyte(s->pktout, (unsigned char) s->gss_buf.length);
 
 		ssh_pkt_adddata(s->pktout, s->gss_buf.value,
-				s->gss_buf.length);
+				(int)s->gss_buf.length);
 		ssh2_pkt_send(ssh, s->pktout);
 		crWaitUntilV(pktin);
 		if (pktin->type != SSH2_MSG_USERAUTH_GSSAPI_RESPONSE) {
@@ -9405,7 +9408,7 @@ static void do_ssh2_authconn(Ssh ssh, unsigned char *in, int inlen,
 		    if (s->gss_sndtok.length != 0) {
 			s->pktout = ssh2_pkt_init(SSH2_MSG_USERAUTH_GSSAPI_TOKEN);
 			ssh_pkt_addstring_start(s->pktout);
-			ssh_pkt_addstring_data(s->pktout,s->gss_sndtok.value,s->gss_sndtok.length);
+			ssh_pkt_addstring_data(s->pktout,s->gss_sndtok.value,(int)s->gss_sndtok.length);
 			ssh2_pkt_send(ssh, s->pktout);
 			s->gsslib->free_tok(s->gsslib, &s->gss_sndtok);
 		    }
@@ -9447,7 +9450,7 @@ static void do_ssh2_authconn(Ssh ssh, unsigned char *in, int inlen,
 		s->gsslib->get_mic(s->gsslib, s->gss_ctx, &s->gss_buf, &mic);
 		s->pktout = ssh2_pkt_init(SSH2_MSG_USERAUTH_GSSAPI_MIC);
 		ssh_pkt_addstring_start(s->pktout);
-		ssh_pkt_addstring_data(s->pktout, mic.value, mic.length);
+		ssh_pkt_addstring_data(s->pktout, mic.value, (int)mic.length);
 		ssh2_pkt_send(ssh, s->pktout);
 		s->gsslib->free_mic(s->gsslib, &mic);
 
@@ -10631,7 +10634,7 @@ static void ssh_reconfig(void *handle, Conf *conf)
 	unsigned long new_next = ssh->last_rekey + rekey_time*60*TICKSPERSEC;
 	unsigned long now = GETTICKCOUNT();
 
-	if (now - ssh->last_rekey > rekey_time*60*TICKSPERSEC) {
+	if (now - ssh->last_rekey > (unsigned long)rekey_time*60*TICKSPERSEC) {
 	    rekeying = "timeout shortened";
 	} else {
 	    ssh->next_rekey = schedule_timer(new_next - now, ssh2_timer, ssh);
@@ -10682,14 +10685,14 @@ static void ssh_reconfig(void *handle, Conf *conf)
 /*
  * Called to send data down the SSH connection.
  */
-static int ssh_send(void *handle, char *buf, int len)
+static int ssh_send(void *handle, char *buf, size_t len)
 {
     Ssh ssh = (Ssh) handle;
 
     if (ssh == NULL || ssh->s == NULL || ssh->protocol == NULL)
 	return 0;
 
-    ssh->protocol(ssh, (unsigned char *)buf, len, 0);
+    ssh->protocol(ssh, (unsigned char *)buf, (int)len, 0);
 
     return ssh_sendbuffer(ssh);
 }

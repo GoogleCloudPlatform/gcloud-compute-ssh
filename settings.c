@@ -382,7 +382,8 @@ static void wprefs(void *sesskey, char *name,
 		   const struct keyvalwhere *mapping, int nvals,
 		   Conf *conf, int primary)
 {
-    char *buf, *p;
+    char *buf;
+    size_t len, pos;
     int i, maxlen;
 
     for (maxlen = i = 0; i < nvals; i++) {
@@ -393,19 +394,20 @@ static void wprefs(void *sesskey, char *name,
         }
     }
 
-    buf = snewn(maxlen + 1, char);
-    p = buf;
+    len = maxlen + 1;
+    buf = snewn(len, char);
+    pos = 0;
 
     for (i = 0; i < nvals; i++) {
 	const char *s = val2key(mapping, nvals,
                                 conf_get_int_int(conf, primary, i));
 	if (s) {
-            p += sprintf(p, "%s%s", (p > buf ? "," : ""), s);
+            pos += szprintf(buf + pos, len - pos, "%s%s", pos ? "," : "", s);
 	}
     }
 
-    assert(p - buf == maxlen);
-    *p = '\0';
+    assert(pos == maxlen);
+    *(buf + pos) = '\0';
 
     write_setting_s(sesskey, name, buf);
 
@@ -571,11 +573,11 @@ void save_open_settings(void *sesskey, Conf *conf)
 
     for (i = 0; i < 22; i++) {
 	char buf[20], buf2[30];
-	sprintf(buf, "Colour%d", i);
-	sprintf(buf2, "%d,%d,%d",
-		conf_get_int_int(conf, CONF_colours, i*3+0),
-		conf_get_int_int(conf, CONF_colours, i*3+1),
-		conf_get_int_int(conf, CONF_colours, i*3+2));
+	szprintf(buf, sizeof(buf), "Colour%d", i);
+	szprintf(buf2, sizeof(buf2), "%d,%d,%d",
+		 conf_get_int_int(conf, CONF_colours, i*3+0),
+		 conf_get_int_int(conf, CONF_colours, i*3+1),
+		 conf_get_int_int(conf, CONF_colours, i*3+2));
 	write_setting_s(sesskey, buf, buf2);
     }
     write_setting_i(sesskey, "RawCNP", conf_get_int(conf, CONF_rawcnp));
@@ -585,12 +587,13 @@ void save_open_settings(void *sesskey, Conf *conf)
     write_setting_i(sesskey, "MouseOverride", conf_get_int(conf, CONF_mouse_override));
     for (i = 0; i < 256; i += 32) {
 	char buf[20], buf2[256];
+	size_t pos2;
 	int j;
-	sprintf(buf, "Wordness%d", i);
-	*buf2 = '\0';
+	szprintf(buf, sizeof(buf), "Wordness%d", i);
+	pos2 = 0;
 	for (j = i; j < i + 32; j++) {
-	    sprintf(buf2 + strlen(buf2), "%s%d",
-		    (*buf2 ? "," : ""),
+	    pos2 += szprintf(buf2 + pos2, sizeof(buf2) - pos2, "%s%d",
+		    pos2 ? "," : "",
 		    conf_get_int_int(conf, CONF_wordness, j));
 	}
 	write_setting_s(sesskey, buf, buf2);
@@ -679,6 +682,8 @@ void load_open_settings(void *sesskey, Conf *conf)
     prot = gpps_raw(sesskey, "Protocol", "default");
     conf_set_int(conf, CONF_protocol, default_protocol);
     conf_set_int(conf, CONF_port, default_port);
+    conf_set_int(conf, CONF_ssh_check_host_ip, 0);
+    conf_set_int(conf, CONF_ssh_strict_host_key_checking, 0);
     {
 	const Backend *b = backend_from_name(prot);
 	if (b) {
@@ -886,7 +891,7 @@ void load_open_settings(void *sesskey, Conf *conf)
 	};
 	char buf[20], *buf2;
 	int c0, c1, c2;
-	sprintf(buf, "Colour%d", i);
+	szprintf(buf, sizeof(buf), "Colour%d", i);
 	buf2 = gpps_raw(sesskey, buf, defaults[i]);
 	if (sscanf(buf2, "%d,%d,%d", &c0, &c1, &c2) == 3) {
 	    conf_set_int_int(conf, CONF_colours, i*3+0, c0);
@@ -913,7 +918,7 @@ void load_open_settings(void *sesskey, Conf *conf)
 	};
 	char buf[20], *buf2, *p;
 	int j;
-	sprintf(buf, "Wordness%d", i);
+	szprintf(buf, sizeof(buf), "Wordness%d", i);
 	buf2 = gpps_raw(sesskey, buf, defaults[i / 32]);
 	p = buf2;
 	for (j = i; j < i + 32; j++) {

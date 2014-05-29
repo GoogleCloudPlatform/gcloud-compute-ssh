@@ -56,7 +56,7 @@ int makekey(unsigned char *data, int len, struct RSAKey *result,
 	p += n;
 	len -= n;
     }
-    return p - data;
+    return (int)(p - data);
 }
 
 int makeprivate(unsigned char *data, int len, struct RSAKey *result)
@@ -335,44 +335,46 @@ int rsastr_len(struct RSAKey *key)
     return 4 * (mdlen + exlen) + 20;
 }
 
-void rsastr_fmt(char *str, struct RSAKey *key)
+void rsastr_fmt(char *str, int str_len, struct RSAKey *key)
 {
     Bignum md, ex;
-    int len = 0, i, nibbles;
+    size_t pos, len = str_len;
+    int i, nibbles;
     static const char hex[] = "0123456789abcdef";
 
     md = key->modulus;
     ex = key->exponent;
 
-    len += sprintf(str + len, "0x");
+    pos = 0;
+    pos += szprintf(str, len - pos, "0x");
 
     nibbles = (3 + bignum_bitcount(ex)) / 4;
     if (nibbles < 1)
 	nibbles = 1;
     for (i = nibbles; i--;)
-	str[len++] = hex[(bignum_byte(ex, i / 2) >> (4 * (i % 2))) & 0xF];
+	str[pos++] = hex[(bignum_byte(ex, i / 2) >> (4 * (i % 2))) & 0xF];
 
-    len += sprintf(str + len, ",0x");
+    pos += szprintf(str + pos, len - pos, ",0x");
 
     nibbles = (3 + bignum_bitcount(md)) / 4;
     if (nibbles < 1)
 	nibbles = 1;
     for (i = nibbles; i--;)
-	str[len++] = hex[(bignum_byte(md, i / 2) >> (4 * (i % 2))) & 0xF];
+	str[pos++] = hex[(bignum_byte(md, i / 2) >> (4 * (i % 2))) & 0xF];
 
-    str[len] = '\0';
+    str[pos] = '\0';
 }
 
 /*
  * Generate a fingerprint string for the key. Compatible with the
  * OpenSSH fingerprint code.
  */
-void rsa_fingerprint(char *str, int len, struct RSAKey *key)
+void rsa_fingerprint(char *str, int str_len, struct RSAKey *key)
 {
     struct MD5Context md5c;
     unsigned char digest[16];
-    char buffer[16 * 3 + 40];
-    int numlen, slen, i;
+    size_t pos, len = str_len;
+    int numlen, i;
 
     MD5Init(&md5c);
     numlen = ssh1_bignum_length(key->modulus) - 2;
@@ -387,18 +389,12 @@ void rsa_fingerprint(char *str, int len, struct RSAKey *key)
     }
     MD5Final(digest, &md5c);
 
-    sprintf(buffer, "%d ", bignum_bitcount(key->modulus));
+    pos = szprintf(str, len, "%d ", bignum_bitcount(key->modulus));
     for (i = 0; i < 16; i++)
-	sprintf(buffer + strlen(buffer), "%s%02x", i ? ":" : "",
+	pos += szprintf(str + pos, len - pos, "%s%02x", i ? ":" : "",
 		digest[i]);
-    strncpy(str, buffer, len);
-    str[len - 1] = '\0';
-    slen = strlen(str);
-    if (key->comment && slen < len - 1) {
-	str[slen] = ' ';
-	strncpy(str + slen + 1, key->comment, len - slen - 1);
-	str[len - 1] = '\0';
-    }
+    if (key->comment && (len + 1) < pos)
+	szprintf(str + pos, len - pos, " %s", key->comment);
 }
 
 /*
@@ -508,7 +504,7 @@ int rsa_public_blob_len(void *data, int maxlen)
 	return -1;
     p += n;
 
-    return p - (unsigned char *)data;
+    return (int)(p - (unsigned char *)data);
 }
 
 void freersakey(struct RSAKey *key)
@@ -606,7 +602,7 @@ static char *rsa2_fmtkey(void *key)
 
     len = rsastr_len(rsa);
     p = snewn(len, char);
-    rsastr_fmt(p, rsa);
+    rsastr_fmt(p, len, rsa);
     return p;
 }
 
@@ -780,7 +776,7 @@ static char *rsa2_fingerprint(void *key)
     struct MD5Context md5c;
     unsigned char digest[16], lenbuf[4];
     char buffer[16 * 3 + 40];
-    char *ret;
+    size_t pos;
     int numlen, i;
 
     MD5Init(&md5c);
@@ -799,14 +795,11 @@ static char *rsa2_fingerprint(void *key)
 
     MD5Final(digest, &md5c);
 
-    sprintf(buffer, "ssh-rsa %d ", bignum_bitcount(rsa->modulus));
+    pos = szprintf(buffer, sizeof(buffer), "ssh-rsa %d ", bignum_bitcount(rsa->modulus));
     for (i = 0; i < 16; i++)
-	sprintf(buffer + strlen(buffer), "%s%02x", i ? ":" : "",
+	pos += szprintf(buffer + pos, sizeof(buffer) - pos, "%s%02x", i ? ":" : "",
 		digest[i]);
-    ret = snewn(strlen(buffer) + 1, char);
-    if (ret)
-	strcpy(ret, buffer);
-    return ret;
+    return dupstr(buffer);;
 }
 
 /*

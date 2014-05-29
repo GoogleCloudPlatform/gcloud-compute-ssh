@@ -171,8 +171,7 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	loaded_session = TRUE;
 	cmdline_session_name = dupstr(value);
 	return 2;
-    }
-    if (!strcmp(p, "-ssh")) {
+    } else if (!strcmp(p, "-ssh")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
@@ -181,8 +180,7 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	conf_set_int(conf, CONF_protocol, default_protocol);
 	conf_set_int(conf, CONF_port, default_port);
 	return 1;
-    }
-    if (!strcmp(p, "-telnet")) {
+    } else if (!strcmp(p, "-telnet")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
@@ -191,8 +189,7 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	conf_set_int(conf, CONF_protocol, default_protocol);
 	conf_set_int(conf, CONF_port, default_port);
 	return 1;
-    }
-    if (!strcmp(p, "-rlogin")) {
+    } else if (!strcmp(p, "-rlogin")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
@@ -201,15 +198,13 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	conf_set_int(conf, CONF_protocol, default_protocol);
 	conf_set_int(conf, CONF_port, default_port);
 	return 1;
-    }
-    if (!strcmp(p, "-raw")) {
+    } else if (!strcmp(p, "-raw")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	default_protocol = PROT_RAW;
 	conf_set_int(conf, CONF_protocol, default_protocol);
-    }
-    if (!strcmp(p, "-serial")) {
+    } else if (!strcmp(p, "-serial")) {
 	RETURN(1);
 	/* Serial is not NONNETWORK in an odd sense of the word */
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
@@ -219,24 +214,20 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	/* The host parameter will already be loaded into CONF_host,
 	 * so copy it across */
 	conf_set_str(conf, CONF_serline, conf_get_str(conf, CONF_host));
-    }
-    if (!strcmp(p, "-v")) {
+    } else if (!strcmp(p, "-v")) {
 	RETURN(1);
 	flags |= FLAG_VERBOSE;
-    }
-    if (!strcmp(p, "-l")) {
+    } else if (!strcmp(p, "-l")) {
 	RETURN(2);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_str(conf, CONF_username, value);
-    }
-    if (!strcmp(p, "-loghost")) {
+    } else if (!strcmp(p, "-loghost")) {
 	RETURN(2);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_str(conf, CONF_loghost, value);
-    }
-    if ((!strcmp(p, "-L") || !strcmp(p, "-R") || !strcmp(p, "-D"))) {
+    } else if ((!strcmp(p, "-L") || !strcmp(p, "-R") || !strcmp(p, "-D"))) {
 	char type, *q, *qq, *key, *val;
 	RETURN(2);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
@@ -293,8 +284,7 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	conf_set_str_str(conf, CONF_portfwd, key, val);
 	sfree(key);
 	sfree(val);
-    }
-    if ((!strcmp(p, "-nc"))) {
+    } else if ((!strcmp(p, "-nc"))) {
 	char *host, *portp;
 
 	RETURN(2);
@@ -311,8 +301,7 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	conf_set_str(conf, CONF_ssh_nc_host, host);
 	conf_set_int(conf, CONF_ssh_nc_port, atoi(portp + 1));
         sfree(host);
-    }
-    if (!strcmp(p, "-m")) {
+    } else if (!strcmp(p, "-m")) {
 	char *filename, *command;
 	int cmdlen, cmdsize;
 	FILE *fp;
@@ -347,14 +336,56 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	conf_set_str(conf, CONF_remote_cmd2, "");
 	conf_set_int(conf, CONF_nopty, TRUE);   /* command => no terminal */
 	sfree(command);
-    }
-    if (!strcmp(p, "-P")) {
+    } else if (!strcmp(p, "-o")) {
+	int i;
+	int set;
+	int yes;
+#       define SSH_OPTION(name,conf,sense)	{ name, sizeof(name)-1, conf, sense },
+	static const struct {
+	    const char* name;
+	    int len;
+	    int conf;
+	    int sense; /* 0:default=0 1:default=1 -1:ignore */
+	} ssh_option[] = {
+	    SSH_OPTION("CheckHostIP", CONF_ssh_check_host_ip, 1)
+	    SSH_OPTION("StrictHostKeyChecking", CONF_ssh_strict_host_key_checking, 1)
+	    SSH_OPTION("UserKnownHostsFile", 0, -1)
+	};
+
+	RETURN(2);
+	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
+	if (!strnicmp(value, "no", 2)) {
+	    value += 2;
+	    set = 0;
+	} else {
+	    set = 1;
+	}
+	for (i = 0; i < lenof(ssh_option); ++i) {
+	    if (!strncmp(value, ssh_option[i].name, ssh_option[i].len)) {
+		if (value[ssh_option[i].len] == '=') {
+		    if (!strnicmp(&value[ssh_option[i].len + 1], "y", 1) ||
+		        !strnicmp(&value[ssh_option[i].len + 1], "yes", 3))
+			yes = 1;
+		    else
+			yes = 0;
+		} else if (value[ssh_option[i].len] == '\0') {
+		    yes = 1;
+		} else {
+		    continue;
+		}
+		if (ssh_option[i].sense >= 0)
+		    conf_set_int(conf, ssh_option[i].conf, ssh_option[i].sense == (set == yes));
+		break;
+	    }
+	}
+	if (i >= lenof(ssh_option))
+	    RETURN(0);
+    } else if (!strcmp(p, "-P") || !strcmp(p, "-p")) {
 	RETURN(2);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
 	SAVEABLE(1);		       /* lower priority than -ssh,-telnet */
 	conf_set_int(conf, CONF_port, atoi(value));
-    }
-    if (!strcmp(p, "-pw")) {
+    } else if (!strcmp(p, "-pw")) {
 	RETURN(2);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
 	SAVEABLE(1);
@@ -370,90 +401,75 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	     * on Unix-like systems. Not guaranteed, of course. */
 	    smemclr(value, strlen(value));
 	}
-    }
-
-    if (!strcmp(p, "-agent") || !strcmp(p, "-pagent") ||
+    } else if (!strcmp(p, "-agent") || !strcmp(p, "-pagent") ||
 	!strcmp(p, "-pageant")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_tryagent, TRUE);
-    }
-    if (!strcmp(p, "-noagent") || !strcmp(p, "-nopagent") ||
+    } else if (!strcmp(p, "-noagent") || !strcmp(p, "-nopagent") ||
 	!strcmp(p, "-nopageant")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_tryagent, FALSE);
-    }
-
-    if (!strcmp(p, "-A")) {
+    } else if (!strcmp(p, "-A")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_agentfwd, 1);
-    }
-    if (!strcmp(p, "-a")) {
+    } else if (!strcmp(p, "-a")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_agentfwd, 0);
-    }
-
-    if (!strcmp(p, "-X")) {
+    } else if (!strcmp(p, "-X")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_x11_forward, 1);
-    }
-    if (!strcmp(p, "-x")) {
+    } else if (!strcmp(p, "-x")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_x11_forward, 0);
-    }
-
-    if (!strcmp(p, "-t")) {
+    } else if (!strcmp(p, "-t")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(1);	/* lower priority than -m */
 	conf_set_int(conf, CONF_nopty, 0);
-    }
-    if (!strcmp(p, "-T")) {
+    } else if (!strcmp(p, "-T")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(1);
 	conf_set_int(conf, CONF_nopty, 1);
-    }
-
-    if (!strcmp(p, "-N")) {
+    } else if (!strcmp(p, "-N")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_ssh_no_shell, 1);
-    }
-
-    if (!strcmp(p, "-C")) {
+    } else if (!strcmp(p, "-C")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_compression, 1);
-    }
-
-    if (!strcmp(p, "-1")) {
+    } else if (!strcmp(p, "-1")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_sshprot, 0);   /* ssh protocol 1 only */
-    }
-    if (!strcmp(p, "-2")) {
+    } else if (!strcmp(p, "-2")) {
 	RETURN(1);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
 	SAVEABLE(0);
 	conf_set_int(conf, CONF_sshprot, 3);   /* ssh protocol 2 only */
-    }
-
-    if (!strcmp(p, "-i")) {
+    } else if (!strcmp(p, "-3")) {
+	/*
+	 * ignore for scp compatibility
+	 * only needed for remote to remote which will fail anyway
+	 */
+	RETURN(1);
+    } else if (!strcmp(p, "-i")) {
 	Filename *fn;
 	RETURN(2);
 	UNAVAILABLE_IN(TOOLTYPE_NONNETWORK);
@@ -461,19 +477,15 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 	fn = filename_from_str(value);
 	conf_set_filename(conf, CONF_keyfile, fn);
         filename_free(fn);
-    }
-
-    if (!strcmp(p, "-4") || !strcmp(p, "-ipv4")) {
+    } else if (!strcmp(p, "-4") || !strcmp(p, "-ipv4")) {
 	RETURN(1);
 	SAVEABLE(1);
 	conf_set_int(conf, CONF_addressfamily, ADDRTYPE_IPV4);
-    }
-    if (!strcmp(p, "-6") || !strcmp(p, "-ipv6")) {
+    } else if (!strcmp(p, "-6") || !strcmp(p, "-ipv6")) {
 	RETURN(1);
 	SAVEABLE(1);
 	conf_set_int(conf, CONF_addressfamily, ADDRTYPE_IPV6);
-    }
-    if (!strcmp(p, "-sercfg")) {
+    } else if (!strcmp(p, "-sercfg")) {
 	char* nextitem;
 	RETURN(2);
 	UNAVAILABLE_IN(TOOLTYPE_FILETRANSFER | TOOLTYPE_NONNETWORK);
@@ -490,7 +502,7 @@ int cmdline_process_param(char *p, char *value, int need_save, Conf *conf)
 		length = strlen(nextitem);
 		skip = 0;
 	    } else {
-		length = end - nextitem;
+		length = (int)(end - nextitem);
 		nextitem[length] = '\0';
 		skip = 1;
 	    }

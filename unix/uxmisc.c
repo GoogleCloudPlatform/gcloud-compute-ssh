@@ -82,6 +82,7 @@ int filename_serialise(const Filename *f, void *vdata)
     }
     return len;
 }
+
 Filename *filename_deserialise(void *vdata, int maxsize, int *used)
 {
     char *data = (char *)vdata;
@@ -92,6 +93,24 @@ Filename *filename_deserialise(void *vdata, int maxsize, int *used)
     end++;
     *used = end - data;
     return filename_from_str(data);
+}
+
+int filename_has_suffix(const Filename* filename, const char* suffix)
+{
+    char* s;
+    s = strrchr(filename->path, '.');
+    if (!s)
+	return 0;
+    return stricmp(s + 1, suffix) == 0;
+}
+
+char* get_command_name(char** argv)
+{
+    char* b;
+    b = strrchr(argv[0], '/');
+    if (b && *(b + 1))
+       return b + 1;
+    return argv[0];
 }
 
 #ifdef DEBUG

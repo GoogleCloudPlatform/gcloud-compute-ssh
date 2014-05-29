@@ -312,7 +312,8 @@ void log_packet(void *handle, int direction, int type,
 	/* (Re-)initialise dumpdata as necessary
 	 * (start of row, or if we've just stopped omitting) */
 	if (!output_pos && !omitted)
-	    sprintf(dumpdata, "  %08x%*s\r\n", p-(p%16), 1+3*16+2+16, "");
+	    szprintf(dumpdata, sizeof(dumpdata),
+		     "  %08x%*s\r\n", p-(p%16), 1+3*16+2+16, "");
 
 	/* Deal with the current byte. */
 	if (blktype == PKTLOG_OMIT) {
@@ -321,10 +322,10 @@ void log_packet(void *handle, int direction, int type,
 	    int c;
 	    if (blktype == PKTLOG_BLANK) {
 		c = 'X';
-		sprintf(smalldata, "XX");
+		szprintf(smalldata, sizeof(smalldata), "XX");
 	    } else {  /* PKTLOG_EMIT */
 		c = ((unsigned char *)data)[p];
-		sprintf(smalldata, "%02x", c);
+		szprintf(smalldata, sizeof(smalldata), "%02x", c);
 	    }
 	    dumpdata[10+2+3*(p%16)] = smalldata[0];
 	    dumpdata[10+2+3*(p%16)+1] = smalldata[1];

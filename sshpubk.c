@@ -358,7 +358,7 @@ int saversakey(const Filename *filename, struct RSAKey *key, char *passphrase)
 	MD5Init(&md5c);
 	MD5Update(&md5c, (unsigned char *)passphrase, strlen(passphrase));
 	MD5Final(keybuf, &md5c);
-	des3_encrypt_pubkey(keybuf, estart, p - estart);
+	des3_encrypt_pubkey(keybuf, estart, (int)(p - estart));
 	smemclr(keybuf, sizeof(keybuf));	/* burn the evidence */
     }
 
@@ -758,6 +758,7 @@ struct ssh2_userkey *ssh2_load_userkey(const Filename *filename,
 	unsigned char *macdata;
 	int maclen;
 	int free_macdata;
+	size_t pos;
 
 	if (old_fmt) {
 	    /* MAC (or hash) only covers the private blob. */
@@ -810,8 +811,9 @@ struct ssh2_userkey *ssh2_load_userkey(const Filename *filename,
 	    sfree(macdata);
 	}
 
+	pos = 0;
 	for (i = 0; i < 20; i++)
-	    sprintf(realmac + 2 * i, "%02x", binary[i]);
+	    pos += szprintf(realmac + pos, sizeof(realmac) - pos, "%02x", binary[i]);
 
 	if (strcmp(mac, realmac)) {
 	    /* An incorrect MAC is an unconditional Error if the key is
@@ -1180,7 +1182,7 @@ int ssh2_save_userkey(const Filename *filename, struct ssh2_userkey *key,
  * A function to determine the type of a private key file. Returns
  * 0 on failure, 1 or 2 on success.
  */
-int key_type(const Filename *filename)
+int key_type(Filename *filename)
 {
     FILE *fp;
     char buf[32];
@@ -1188,6 +1190,34 @@ int key_type(const Filename *filename)
     const char sshcom_sig[] = "---- BEGIN SSH2 ENCRYPTED PRIVAT";
     const char openssh_sig[] = "-----BEGIN ";
     int i;
+
+    /*
+     * For ssh-keygen/ssh/scp compatibility we check for and use
+     * the corresponding .<PRIVATE_KEY_SUFFIX> file if found.  The
+     * replacement is done in place here to avoid refactoring all
+     * callers.  This is similar to ssh/scp/ssh-keygen switching
+     * between "id" and "id.pub".
+     */
+    if (!filename_has_suffix(filename, PRIVATE_KEY_SUFFIX)) {
+        Filename* pksfilename;
+        char* path;
+        i = strlen(filename_to_str(filename)) + sizeof(PRIVATE_KEY_SUFFIX) + 1;
+        path = snewn(i, char);
+        szprintf(path, i, "%s." PRIVATE_KEY_SUFFIX, filename_to_str(filename));
+        pksfilename = filename_from_str(path);
+	sfree(path);
+        fp = f_open(pksfilename, "r", FALSE);
+        if (fp) {
+	    fclose(fp);
+	    /*
+	     * filename_swap(filename, pksfilename)?
+	     */
+	    path = filename->path;
+	    filename->path = pksfilename->path;
+	    pksfilename->path = path;
+        }
+        filename_free(pksfilename);
+    }
 
     fp = f_open(filename, "r", FALSE);
     if (!fp)

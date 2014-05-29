@@ -107,7 +107,7 @@ Bignum rsadecrypt(Bignum input, struct RSAKey *key);
 void rsasign(unsigned char *data, int length, struct RSAKey *key);
 void rsasanitise(struct RSAKey *key);
 int rsastr_len(struct RSAKey *key);
-void rsastr_fmt(char *str, struct RSAKey *key);
+void rsastr_fmt(char *str, int length, struct RSAKey *key);
 void rsa_fingerprint(char *str, int len, struct RSAKey *key);
 int rsa_verify(struct RSAKey *key);
 unsigned char *rsa_public_blob(struct RSAKey *key, int *len);
@@ -571,7 +571,7 @@ enum {
     SSH_KEYTYPE_SSH1, SSH_KEYTYPE_SSH2,
     SSH_KEYTYPE_OPENSSH, SSH_KEYTYPE_SSHCOM
 };
-int key_type(const Filename *filename);
+int key_type(Filename *filename);
 char *key_type_to_str(int type);
 
 int import_possible(int type);

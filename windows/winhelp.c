@@ -34,13 +34,13 @@ void init_help(void)
     if (p && p >= r) r = p+1;
     q = strrchr(b, ':');
     if (q && q >= r) r = q+1;
-    strcpy(r, PUTTY_HELP_FILE);
+    szprintf(r, &b[sizeof(b)] - r, "%s", PUTTY_HELP_FILE);
     if ( (fp = fopen(b, "r")) != NULL) {
 	help_path = dupstr(b);
 	fclose(fp);
     } else
 	help_path = NULL;
-    strcpy(r, PUTTY_HELP_CONTENTS);
+    szprintf(r, &b[sizeof(b)] - r, "%s", PUTTY_HELP_CONTENTS);
     if ( (fp = fopen(b, "r")) != NULL) {
 	help_has_contents = TRUE;
 	fclose(fp);
@@ -48,7 +48,7 @@ void init_help(void)
 	help_has_contents = FALSE;
 
 #ifndef NO_HTMLHELP
-    strcpy(r, PUTTY_CHM_FILE);
+    szprintf(r, &b[sizeof(b)] - r, "%s", PUTTY_CHM_FILE);
     if ( (fp = fopen(b, "r")) != NULL) {
 	chm_path = dupstr(b);
 	fclose(fp);
