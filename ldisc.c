@@ -161,7 +161,7 @@ void ldisc_send(void *handle, char *buf, size_t len, int interactive)
     /*
      * Less than zero means null terminated special string.
      */
-    if (len < 0) {
+    if ((int)len < 0) {
 	len = strlen(buf);
 	keyflag = KCTRL('@');
     }
