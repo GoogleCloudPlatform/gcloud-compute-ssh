@@ -23,6 +23,13 @@ char *platform_get_x_display(void) {
     return dupstr(getenv("DISPLAY"));
 }
 
+const char *platform_default_term(void) {
+    const char* term = (const char*)dupstr(getenv("TERM"));
+    if (term == NULL)
+	term = "dumb";
+    return term;
+}
+
 Filename *filename_from_str(const char *str)
 {
     Filename *ret = snew(Filename);

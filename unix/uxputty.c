@@ -121,6 +121,13 @@ char *platform_get_x_display(void) {
     return dupstr(display);
 }
 
+const char *platform_default_term(void) {
+    const char* term = (const char*)dupstr(getenv("TERM"));
+    if (term == NULL)
+	term = "xterm";
+    return term;
+}
+
 const int share_can_be_downstream = TRUE;
 const int share_can_be_upstream = TRUE;
 

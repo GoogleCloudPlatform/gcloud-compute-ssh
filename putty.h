@@ -490,6 +490,7 @@ extern const char *const appname;
 #define FLAG_VERBOSE     0x0001
 #define FLAG_STDERR      0x0002
 #define FLAG_INTERACTIVE 0x0004
+#define FLAG_SSH         0x0008
 GLOBAL int flags;
 
 /*
@@ -973,6 +974,7 @@ char *platform_default_s(const char *name);
 int platform_default_i(const char *name, int def);
 Filename *platform_default_filename(const char *name);
 FontSpec *platform_default_fontspec(const char *name);
+const char *platform_default_term(void);
 
 /*
  * Exports from terminal.c.

@@ -304,11 +304,9 @@ int main(int argc, char **argv)
     int got_host = FALSE;
     int use_subsystem = 0;
     int operands = 0;
-    int running_as_ssh;
     unsigned long now, next, then;
 
     command_name = get_command_name(argv);
-    running_as_ssh = !stricmp(command_name, "ssh");
     sklist = NULL;
     skcount = sksize = 0;
     /*
@@ -319,6 +317,8 @@ int main(int argc, char **argv)
     default_port = 22;
 
     flags = FLAG_STDERR;
+    if (!stricmp(command_name, "ssh"))
+	flags |= FLAG_SSH;
     /*
      * Process the command line.
      */
@@ -328,7 +328,7 @@ int main(int argc, char **argv)
     default_protocol = conf_get_int(conf, CONF_protocol);
     default_port = conf_get_int(conf, CONF_port);
     errors = 0;
-    if (!running_as_ssh) {
+    if (!(flags & FLAG_SSH)) {
 	/*
 	 * Override the default protocol if PLINK_PROTOCOL is set.
 	 */
@@ -563,13 +563,6 @@ int main(int argc, char **argv)
 	conf_set_str(conf, CONF_host, hostbuf);
 	sfree(hostbuf);
     }
-
-    /*
-     * windows console TERM env var is problematic
-     * assert that here when running as ssh
-     */
-    if (running_as_ssh)
-        conf_set_str_str(conf, CONF_environmt, "TERM", "dumb");
 
     /*
      * Perform command-line overrides on session configuration.

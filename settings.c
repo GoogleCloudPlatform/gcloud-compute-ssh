@@ -665,6 +665,7 @@ void load_open_settings(void *sesskey, Conf *conf)
 {
     int i;
     char *prot;
+    const char *term;
 
     conf_set_int(conf, CONF_ssh_subsys, 0);   /* FIXME: load this properly */
     conf_set_str(conf, CONF_remote_cmd, "");
@@ -709,7 +710,10 @@ void load_open_settings(void *sesskey, Conf *conf)
     }
     gppi(sesskey, "TCPNoDelay", 1, conf, CONF_tcp_nodelay);
     gppi(sesskey, "TCPKeepalives", 0, conf, CONF_tcp_keepalives);
-    gpps(sesskey, "TerminalType", "xterm", conf, CONF_termtype);
+    term = platform_default_term();
+    if (!(flags & FLAG_SSH) && strncmp(term, "xterm", 5))
+	term = "xterm";
+    gpps(sesskey, "TerminalType", term, conf, CONF_termtype);
     gpps(sesskey, "TerminalSpeed", "38400,38400", conf, CONF_termspeed);
     if (!gppmap(sesskey, "TerminalModes", conf, CONF_ttymodes)) {
 	/* This hardcodes a big set of defaults in any new saved

@@ -520,3 +520,10 @@ int is_interactive(void)
 char *platform_get_x_display(void) {
     return dupstr(getenv("DISPLAY"));
 }
+
+const char *platform_default_term(void) {
+    const char* term = (const char*)dupstr(getenv("TERM"));
+    if (term == NULL)
+	term = "xterm";
+    return term;
+}

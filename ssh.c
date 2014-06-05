@@ -8765,7 +8765,8 @@ static void do_ssh2_authconn(Ssh ssh, unsigned char *in, int inlen,
 	    free_prompts(s->cur_prompt);
 	} else {
 	    char *stuff;
-	    if ((flags & FLAG_VERBOSE) || (flags & FLAG_INTERACTIVE)) {
+	    if (((flags & FLAG_VERBOSE) || (flags & FLAG_INTERACTIVE)) &&
+                !(flags & FLAG_SSH)) {
 		stuff = dupprintf("Using username \"%s\".\r\n", ssh->username);
 		c_write_str(ssh, stuff);
 		sfree(stuff);
@@ -9553,7 +9554,8 @@ static void do_ssh2_authconn(Ssh ssh, unsigned char *in, int inlen,
 		    /* Special case: for reasons best known to themselves,
 		     * some servers send k-i requests with no prompts and
 		     * nothing to display. Keep quiet in this case. */
-		    if (s->num_prompts || name_len || inst_len) {
+		    if ((s->num_prompts || name_len || inst_len) &&
+                        !(flags & FLAG_SSH)) {
 			s->cur_prompt->instruction =
 			    dupprintf("Using keyboard-interactive authentication.%s%.*s",
 				      inst_len ? "\n" : "", inst_len, inst);

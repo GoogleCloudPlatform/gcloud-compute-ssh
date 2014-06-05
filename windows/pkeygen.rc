@@ -1,0 +1,8 @@
+#include "rcstuff.h"
+
+#define APPNAME "Pkeygen"
+#define APPDESC "Command-line SSH keygen"
+
+200 ICON "putty.ico"
+
+#include "version.rc2"
